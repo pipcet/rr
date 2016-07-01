@@ -15,7 +15,7 @@ namespace rr {
  */
 class VirtualPerfCounterMonitor : public FileMonitor {
 public:
-  static bool should_virtualize(const struct perf_event_attr& attr);
+  static bool should_virtualize();
 
   VirtualPerfCounterMonitor(Task* t, Task* target,
                             const struct perf_event_attr& attr);

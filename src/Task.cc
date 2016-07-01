@@ -51,6 +51,8 @@
 
 using namespace std;
 
+extern int tracee_pid;
+
 namespace rr {
 
 static const unsigned int NUM_X86_DEBUG_REGS = 8;
@@ -660,6 +662,7 @@ static void init_xsave() {
   // even when it might not be needed. Simpler that way.
   cpuid_data = cpuid(CPUID_GETXSAVE, 0);
   xsave_area_size = cpuid_data.ecx;
+  xsave_area_size = 832;
 }
 
 const ExtraRegisters& Task::extra_regs() {
@@ -789,7 +792,7 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
     hpc.reset(tick_period == RESUME_UNLIMITED_TICKS
-                  ? 0xffffffff
+                  ? 0xffffff
                   : max<Ticks>(1, tick_period));
     // Ensure preload_globals.thread_locals_initialized is up to date. Avoid
     // unnecessary writes by caching last written value per-AddressSpace.
@@ -806,6 +809,7 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
     }
   }
 
+  tracee_pid = tid;
   LOG(debug) << "resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string());
@@ -868,9 +872,9 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
   switch (extra_registers.format()) {
     case ExtraRegisters::XSAVE: {
       if (xsave_area_size) {
-        struct iovec vec = { extra_registers.data_.data(),
-                             extra_registers.data_.size() };
-        ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
+        //struct iovec vec = { extra_registers.data_.data(),
+        //                     extra_registers.data_.size() };
+        //ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
       } else {
 #if defined(__i386__)
         ptrace_if_alive(PTRACE_SETFPXREGS, nullptr,
@@ -1228,6 +1232,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
   // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
   // whatever they pick up something spurious later.
   hpc.stop();
+  LOG(debug) << "ticks = " << more_ticks << " + " << ticks;
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
 
@@ -1280,7 +1285,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
       ip() ==
           address_of_last_execution_resume.increment_by_bkpt_insn_length(
               arch())) {
-    ASSERT(this, more_ticks == 0);
+    //ASSERT(this, more_ticks == 0);
     // When we resume execution and immediately hit a breakpoint, the original
     // syscall number can be reset to -1. Undo that, so that the register
     // state matches the state we'd be in if we hadn't resumed. ReplayTimeline

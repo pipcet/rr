@@ -7,6 +7,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/utsname.h>
+#include <sys/signal.h>
 
 #include <sstream>
 
@@ -237,7 +238,17 @@ bool parse_global_option(std::vector<std::string>& args) {
 
 using namespace rr;
 
+int tracee_pid;
+
+void sigstkflt(int)
+{
+  if (tracee_pid != 0)
+    printf ("%d\n", kill(tracee_pid, SIGSTKFLT));
+  printf("SIGSTKFLT %d\n", tracee_pid);
+}
+
 int main(int argc, char* argv[]) {
+  signal(SIGSTKFLT, sigstkflt);
   init_random();
 
   vector<string> args;

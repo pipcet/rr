@@ -61,6 +61,7 @@ public:
    * Read the current value of the ticks counter.
    */
   Ticks read_ticks();
+  Ticks read_ticks_nondestructively(unsigned long *data);
 
   /**
    * Return the fd we last used to monitor the ticks counter.

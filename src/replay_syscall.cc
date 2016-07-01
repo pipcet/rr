@@ -1080,7 +1080,7 @@ static void rep_process_syscall_arch(ReplayTask* t, ReplayTraceStep* step) {
       if (target && cpu == -1 && group_fd == -1 && !flags) {
         auto attr =
             t->read_mem(remote_ptr<struct perf_event_attr>(trace_regs.arg1()));
-        if (VirtualPerfCounterMonitor::should_virtualize(attr)) {
+        if (VirtualPerfCounterMonitor::should_virtualize()) {
           t->fd_table()->add_monitor(
               fd, new VirtualPerfCounterMonitor(t, target, attr));
         }

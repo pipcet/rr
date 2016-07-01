@@ -416,6 +416,8 @@ void RecordSession::task_continue(const StepState& step_state) {
     } else {
       ticks_request = (TicksRequest)max<Ticks>(
           0, scheduler().current_timeslice_end() - t->tick_count());
+      if (ticks_request > 0xfffff)
+        ticks_request = (TicksRequest)0xffffff;
     }
     bool singlestep =
         t->emulated_ptrace_cont_command == PTRACE_SINGLESTEP ||
@@ -1517,7 +1519,8 @@ static string lookup_by_path(const string& name) {
     // speed up the loading of the other libraries. We supply a placeholder
     // which is then mutated to the correct filename in
     // Monkeypatcher::patch_after_exec.
-    ld_preload += syscall_buffer_lib_path + SYSCALLBUF_LIB_FILENAME_PADDED;
+    ld_preload += syscall_buffer_lib_path + SYSCALLBUF_LIB_FILENAME;
+    LOG(debug) << "LD_PRELOAD=" << ld_preload;
     auto it = env.begin();
     for (; it != env.end(); ++it) {
       if (it->find("LD_PRELOAD=") != 0) {
@@ -1535,6 +1538,8 @@ static string lookup_by_path(const string& name) {
     } else {
       *it = ld_preload;
     }
+  } else {
+    assert(0);
   }
 
   string env_pair = create_pulseaudio_config();

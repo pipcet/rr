@@ -14,11 +14,8 @@ using namespace std;
 
 namespace rr {
 
-bool VirtualPerfCounterMonitor::should_virtualize(
-    const struct perf_event_attr& attr) {
-  auto ticks_attr = PerfCounters::ticks_attr();
-  ticks_attr.sample_period = attr.sample_period;
-  return !memcmp(&ticks_attr, &attr, sizeof(attr));
+bool VirtualPerfCounterMonitor::should_virtualize() {
+  return true;
 }
 
 VirtualPerfCounterMonitor::VirtualPerfCounterMonitor(
@@ -29,7 +26,8 @@ VirtualPerfCounterMonitor::VirtualPerfCounterMonitor(
       flags(0),
       sig(0),
       enabled(false) {
-  ASSERT(t, should_virtualize(attr));
+  (void) attr;
+  ASSERT(t, should_virtualize());
   // XXX When we support interrupts, we need to add code for signal dispatching
   ASSERT(t, attr.sample_period == 0xffffffff) << "Don't support interrupts yet";
 }

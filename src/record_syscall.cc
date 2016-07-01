@@ -2959,9 +2959,7 @@ static Switchable rec_prepare_syscall_arch(RecordTask* t,
       int group_fd = t->regs().arg4_signed();
       unsigned long flags = t->regs().arg5();
       if (target && cpu == -1 && group_fd == -1 && !flags) {
-        auto attr =
-            t->read_mem(remote_ptr<struct perf_event_attr>(t->regs().arg1()));
-        if (VirtualPerfCounterMonitor::should_virtualize(attr)) {
+        if (VirtualPerfCounterMonitor::should_virtualize()) {
           Registers r = t->regs();
           // Turn this into an inotify_init() syscall. This just gives us an
           // allocated fd. Syscalls using this fd will be emulated (except for
