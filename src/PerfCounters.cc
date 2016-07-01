@@ -74,13 +74,9 @@
 
 using namespace std;
 
-extern int tracee_pid;
-  
 namespace rr {
 
 PerfCounters::PerfCounters(pid_t tid) : tid(tid), started(false) {
-  if (tracee_pid == 0)
-    tracee_pid = tid;
 }
 
 unsigned long buffer[1024];

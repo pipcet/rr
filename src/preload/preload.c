@@ -597,17 +597,6 @@ extern char _breakpoint_table_entry_end;
 static unsigned long long lwpbuffer[1024];
 static unsigned long long realbuffer[1024];
 
-#if 0
-static void sigtrap(int x, siginfo_t *siginfo, void *p)
-{
-  (void) x;
-  (void) siginfo;
-  (void) p;
-
-  kill(getppid(), SIGWINCH);
-}
-#endif
-
 /**
  * Initialize process-global buffering state, if enabled.
  */
@@ -624,23 +613,6 @@ static void __attribute__((constructor)) init_process(void) {
   lwpbuffer[0x12] = 0x00ffffff01ffffff;
   lwpbuffer[0x13] = 0x00ffffff01ffffff;
   asm volatile("llwpcb %0" : : "r" (lwpbuffer));
-
-#if 0
-  sa.sa_sigaction = sigtrap;
-  sigemptyset(&sa.sa_mask);
-  sa.sa_flags = 0;
-
-  sigaction(SIGSTKFLT, &sa, NULL);
-#endif
-
-  //printf("%016llx\n", realbuffer[0]);
-  //printf("%016llx\n", realbuffer[1]);
-  //printf("%016llx\n", realbuffer[2]);
-  //printf("%016llx\n", realbuffer[3]);
-
-  //printf("\n");
-
-  //printf("llwpcb\n");
 
   struct rrcall_init_preload_params params;
   extern RR_HIDDEN void _syscall_hook_trampoline(void);
