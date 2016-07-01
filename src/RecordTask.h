@@ -424,7 +424,7 @@ public:
    */
   void save_ptrace_signal_siginfo(const siginfo_t& si);
 
-  enum { SYNTHETIC_TIME_SLICE_SI_CODE = -9999 };
+  enum { SYNTHETIC_TIME_SLICE_SI_CODE = (int)0xdeadbeef };
 
 private:
   ~RecordTask();
