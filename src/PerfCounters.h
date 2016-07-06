@@ -18,6 +18,8 @@ struct perf_event_attr;
 
 namespace rr {
 
+class Task;
+  
 /**
  * A class encapsulating the performance counters we use to monitor
  * each task during recording and replay.
@@ -35,7 +37,7 @@ public:
   /**
    * Create performance counters monitoring the given task.
    */
-  PerfCounters(pid_t tid);
+  PerfCounters(Task* task, pid_t tid, bool);
   ~PerfCounters() { stop(); }
 
   // Change this to 'true' to enable perf counters that may be interesting
@@ -61,7 +63,7 @@ public:
    * Read the current value of the ticks counter.
    */
   Ticks read_ticks();
-  Ticks read_ticks_nondestructively(unsigned long *data);
+  Ticks read_ticks_nondestructively();
 
   /**
    * Return the fd we last used to monitor the ticks counter.
@@ -84,12 +86,16 @@ public:
   static const struct perf_event_attr& ticks_attr();
 
 private:
+  rr::Task* task;
   pid_t tid;
   ScopedFd fd_ticks;
   ScopedFd fd_page_faults;
   ScopedFd fd_hw_interrupts;
   ScopedFd fd_instructions_retired;
   bool started;
+  unsigned long last_ticks_period;
+  unsigned long saved_ticks;
+  unsigned long ticks_read;
 };
 
 } // namespace rr
