@@ -1519,7 +1519,7 @@ static string lookup_by_path(const string& name) {
     // speed up the loading of the other libraries. We supply a placeholder
     // which is then mutated to the correct filename in
     // Monkeypatcher::patch_after_exec.
-    ld_preload += syscall_buffer_lib_path + SYSCALLBUF_LIB_FILENAME;
+    ld_preload += syscall_buffer_lib_path + SYSCALLBUF_LIB_FILENAME_PADDED;
     LOG(debug) << "LD_PRELOAD=" << ld_preload;
     auto it = env.begin();
     for (; it != env.end(); ++it) {
