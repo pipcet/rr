@@ -282,6 +282,61 @@ void AddressSpace::map_rr_page(Task* t) {
       TRACED, PRIVILEGED, RECORDING_AND_REPLAY, t->arch());
 }
 
+void AddressSpace::map_lwp_area(Task* t) {
+  int prot = PROT_READ | PROT_WRITE;
+  int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED;
+
+  struct stat fstat;
+  string file_name;
+  {
+    AutoRemoteSyscalls remote(t);
+
+    remote.infallible_mmap_syscall(lwp_area_start(), lwp_area_size(), prot, flags,
+                                   -1, 0);
+
+    t->ptrace_if_alive(PTRACE_POKEDATA, remote_ptr<void>(lwp_area_start()),
+                       (void *)(((lwp_area_size() - 4096L) << 32) | LWP_FLAGS));
+    t->ptrace_if_alive(PTRACE_POKEDATA, remote_ptr<void>(lwp_area_start()+8),
+                       (void *)(lwp_area_start() + 4096L).as_int());
+    t->ptrace_if_alive(PTRACE_POKEDATA, remote_ptr<void>(lwp_area_start()+32),
+                       (void *)(LWP_FILTER << 32L));
+    t->ptrace_if_alive(PTRACE_POKEDATA, remote_ptr<void>(lwp_area_start()+128),
+                       //(void *)0x00ffffff01ffffffL
+                       (void *)0x0000000001ffffffL
+                       );
+    t->ptrace_if_alive(PTRACE_POKEDATA, remote_ptr<void>(lwp_area_start()+136),
+                       //(void *)0x00ffffff01ffffffL
+                       (void *)0x0000000001ffffffL
+                       );
+    t->ptrace_if_alive(PTRACE_POKEDATA, remote_ptr<void>(lwp_area_start()+144),
+                       //(void *)0x00ffffff01ffffffL
+                       (void *)0x0000000001ffffffL
+                       );
+    t->ptrace_if_alive(PTRACE_POKEDATA, remote_ptr<void>(lwp_area_start()+152),
+                       //(void *)0x00ffffff01ffffffL
+                       (void *)0x0000000001ffffffL
+                       );
+
+    assert(!t->extra_regs().empty());
+    t->extra_regs().setLWPU32(0, long(lwp_area_start().as_int()) & 0xffffffff);
+    t->extra_regs().setLWPU32(1, long(lwp_area_start().as_int()) >> 32);
+    t->extra_regs().setLWPU32(2, LWP_FLAGS);
+    t->extra_regs().setLWPU32(3, 0);
+    t->extra_regs().setLWPU32(4, (long(lwp_area_start().as_int())+4096) & 0xffffffff);
+    t->extra_regs().setLWPU32(5, (long(lwp_area_start().as_int())+4096) >> 32);
+    t->extra_regs().setLWPU32(6, lwp_area_size() - 4096);
+    t->extra_regs().setLWPU32(7, LWP_FILTER);
+    t->extra_regs().setLWPU32(17, /* 0xffffff */ 0);
+    t->extra_regs().setLWPU32(18, /* 0xffffff */ 0);
+    t->extra_regs().setLWPU32(19, /* 0xffffff */ 0);
+    t->extra_registers_changed = true;
+    t->set_extra_regs(t->extra_regs());
+  }
+
+  map(lwp_area_start(), lwp_area_size(), prot, flags, 0, file_name, fstat.st_dev,
+      fstat.st_ino);
+}
+
 /**
  * Must match generate_rr_page.py
  */
@@ -395,6 +450,7 @@ void AddressSpace::post_exec_syscall(Task* t) {
   // Now we can set up the "rr page" at its fixed address. This gives
   // us traced and untraced syscall instructions at known, fixed addresses.
   map_rr_page(t);
+  map_lwp_area(t);
 }
 
 void AddressSpace::brk(remote_ptr<void> addr, int prot) {

@@ -614,6 +614,9 @@ public:
     return rr_page_start() + rr_page_size();
   }
 
+  static remote_ptr<void> lwp_area_start() { return rr_page_end(); }
+  static uint32_t lwp_area_size() { return 4096 + 8192; };
+
   enum Traced { TRACED, UNTRACED };
   enum Privileged { PRIVILEGED, UNPRIVILEGED };
   enum Enabled { RECORDING_ONLY, REPLAY_ONLY, RECORDING_AND_REPLAY };
@@ -696,6 +699,8 @@ private:
 
   // Also sets brk_ptr.
   void map_rr_page(Task* t);
+  // Also enables LWP
+  void map_lwp_area(Task* t);
 
   bool update_watchpoint_value(const MemoryRange& range,
                                Watchpoint& watchpoint);
