@@ -21,6 +21,8 @@
 #include "Task.h"
 #include "log.h"
 
+#include "LWP.h"
+
 using namespace std;
 
 namespace rr {

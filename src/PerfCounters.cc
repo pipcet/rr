@@ -71,6 +71,7 @@
 #include "record_signal.h"
 #include "seccomp-bpf.h"
 #include "util.h"
+#include "LWP.h"
 
 using namespace std;
 
