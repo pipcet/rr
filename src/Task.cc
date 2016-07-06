@@ -643,6 +643,9 @@ const Registers& Task::regs() const {
 
 // 0 means XSAVE not detected
 static unsigned int xsave_area_size = 0;
+static unsigned long xsave_features;
+static unsigned int xsave_lwp_size;
+static unsigned int xsave_lwp_off;
 static bool xsave_initialized = false;
 
 static void init_xsave() {
@@ -661,6 +664,13 @@ static void init_xsave() {
   // even when it might not be needed. Simpler that way.
   cpuid_data = cpuid(CPUID_GETXSAVE, 0);
   xsave_area_size = cpuid_data.ecx;
+  xsave_features = ((long)cpuid_data.edx << 32LL) + cpuid_data.eax;
+
+  if (xsave_features & (1LL<<62)) {
+    cpuid_data = cpuid(CPUID_GETXSAVE, 62);
+    xsave_lwp_size = cpuid_data.eax;
+    xsave_lwp_off = cpuid_data.ebx;
+  }
 }
 
 ExtraRegisters& Task::extra_regs() {
@@ -878,18 +888,49 @@ void Task::set_regs(const Registers& regs) {
 }
 
 void Task::set_extra_regs(const ExtraRegisters& regs) {
+  if (!extra_registers_changed)
+    return;
+
   ASSERT(this, !regs.empty()) << "Trying to set empty ExtraRegisters";
+
+  std::vector<uint8_t> old_data;
+  old_data.resize(xsave_area_size);
+  for (size_t i = 0; i < xsave_area_size; i++) {
+    if (i >= xsave_lwp_off && i < xsave_lwp_size + xsave_lwp_off)
+      old_data[i] = extra_registers.data_[i];
+  }
   extra_registers = regs;
+  for (size_t i = 0; i < xsave_area_size; i++) {
+    if (i >= xsave_lwp_off && i < xsave_lwp_size + xsave_lwp_off)
+      extra_registers.data_[i] = old_data[i];
+  }
   extra_registers_known = true;
+  extra_registers_changed = false;
 
   init_xsave();
 
   switch (extra_registers.format()) {
     case ExtraRegisters::XSAVE: {
       if (xsave_area_size) {
-        struct iovec vec = { extra_registers.data_.data(),
-                             extra_registers.data_.size() };
+        extra_registers.data_.data()[512+7] |= 0x40;
+        ExtraRegisters extra_registers2;
+        extra_registers2.data_.resize(xsave_area_size);
+        struct iovec vec = { extra_registers.data_.data(), regs.data_.size() };
+        struct iovec vec2 = { extra_registers2.data_.data(), extra_registers2.data_.size() };
+        ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
+        //printf("overwriting "); dump_er(extra_registers2);
+        if (extra_registers2.getLWPU32(0) && !extra_registers.getLWPU32(0)) {
+          extra_registers.setLWPU32( 0, extra_registers2.getLWPU32( 0));
+          extra_registers.setLWPU32( 1, extra_registers2.getLWPU32( 1));
+          extra_registers.setLWPU32( 2, extra_registers2.getLWPU32( 2));
+          extra_registers.setLWPU32( 3, extra_registers2.getLWPU32( 3));
+          extra_registers.setLWPU32( 7, extra_registers2.getLWPU32( 7));
+          extra_registers.setLWPU32(18, extra_registers2.getLWPU32(18));
+        }
+        //printf("writing "); dump_er(extra_registers);
         ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
+        ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
+        //printf("wrote "); dump_er(extra_registers2);
       } else {
 #if defined(__i386__)
         ptrace_if_alive(PTRACE_SETFPXREGS, nullptr,

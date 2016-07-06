@@ -125,6 +125,8 @@ class Task {
   friend class Session;
   friend class RecordSession;
   friend class ReplaySession;
+  friend class PerfCounters;
+  friend class AddressSpace;
 
 public:
   typedef std::vector<WatchConfig> DebugRegs;
@@ -898,6 +900,7 @@ protected:
   // When |extra_registers_known|, we have saved our extra registers.
   ExtraRegisters extra_registers;
   bool extra_registers_known;
+  bool extra_registers_changed;
   // The session we're part of.
   Session* session_;
   // The task group this belongs to.
