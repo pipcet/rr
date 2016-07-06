@@ -67,7 +67,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       desched_fd_child(-1),
       // This will be initialized when the syscall buffer is.
       cloned_file_data_fd_child(-1),
-      hpc(_tid),
+      hpc(this,_tid, session.is_recording()),
       tid(_tid),
       rec_tid(_rec_tid > 0 ? _rec_tid : _tid),
       syscallbuf_size(0),
@@ -82,6 +82,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       detected_unexpected_exit(false),
       extra_registers(a),
       extra_registers_known(false),
+      extra_registers_changed(false),
       session_(&session),
       top_of_stack(),
       seen_ptrace_exit_event(false) {}
@@ -662,7 +663,7 @@ static void init_xsave() {
   xsave_area_size = cpuid_data.ecx;
 }
 
-const ExtraRegisters& Task::extra_regs() {
+ExtraRegisters& Task::extra_regs() {
   if (!extra_registers_known) {
     init_xsave();
     if (xsave_area_size) {
@@ -697,6 +698,7 @@ const ExtraRegisters& Task::extra_regs() {
     }
 
     extra_registers_known = true;
+    extra_registers_changed = false;
   }
   return extra_registers;
 }
@@ -813,6 +815,8 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   how_last_execution_resumed = how;
   set_debug_status(0);
 
+  if (extra_registers_changed)
+    set_extra_regs(extra_registers);
   pid_t wait_ret = 0;
   if (session().is_recording()) {
     /* There's a nasty race where a stopped task gets woken up by a SIGKILL
