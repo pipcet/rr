@@ -99,8 +99,14 @@ public:
 
   void print_register_file_compact(FILE* f) const;
 
+  unsigned getLWPU32(size_t index);
+  void setLWPU32(size_t index, unsigned value);
+
+  remote_ptr<unsigned long> dump();
+
 private:
   friend class Task;
+  friend class RecordTask;
 
   Format format_;
   SupportedArch arch_;
