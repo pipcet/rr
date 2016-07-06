@@ -59,6 +59,13 @@ class AssemblyTemplate(object):
         return bytes
 
 templates = {
+    'X86Syscall32VsyscallImplementation': AssemblyTemplate(
+        RawBytes(0x51),         # push %ecx
+        RawBytes(0x52),         # push %edx
+        RawBytes(0x55),         # push %ebp
+        RawBytes(0x89, 0xcd),   # mov %ecx,%ebp
+        RawBytes(0x0f, 0x05),   # syscall
+    ),
     'X86SysenterVsyscallImplementation': AssemblyTemplate(
         RawBytes(0x51),         # push %ecx
         RawBytes(0x52),         # push %edx
