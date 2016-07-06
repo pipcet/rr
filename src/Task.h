@@ -345,7 +345,9 @@ public:
   const Registers& regs() const;
 
   /** Return the extra registers of this. */
-  const ExtraRegisters& extra_regs();
+  ExtraRegisters& extra_regs();
+
+  void dump_er(ExtraRegisters&);
 
   /** Return the current arch of this. This can change due to exec(). */
   SupportedArch arch() const {

@@ -703,6 +703,21 @@ ExtraRegisters& Task::extra_regs() {
   return extra_registers;
 }
 
+void Task::dump_er(ExtraRegisters& er)
+{
+  remote_ptr<unsigned long> ptr = er.dump();
+
+  if (ptr) {
+    unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
+    unsigned long w1 = fallible_ptrace(PTRACE_PEEKDATA, ptr+1, nullptr);
+    unsigned long w2 = fallible_ptrace(PTRACE_PEEKDATA, ptr+2, nullptr);
+    unsigned long w3 = fallible_ptrace(PTRACE_PEEKDATA, ptr+3, nullptr);
+
+    printf("event@%lx: %016lx %016lx %016lx %016lx\n",
+           ptr.as_int(), w0, w1, w2, w3);
+  }
+}
+  
 static ssize_t dr_user_word_offset(size_t i) {
   assert(i < NUM_X86_DEBUG_REGS);
   return offsetof(struct user, u_debugreg[0]) + sizeof(void*) * i;
@@ -1532,6 +1547,23 @@ Task::CapturedState Task::capture_state() {
   state.serial = serial;
   state.regs = regs();
   state.extra_regs = extra_regs();
+  if (state.extra_regs.data_[832] |
+      state.extra_regs.data_[833] |
+      state.extra_regs.data_[834] |
+      state.extra_regs.data_[835] |
+      state.extra_regs.data_[836] |
+      state.extra_regs.data_[837] |
+      state.extra_regs.data_[838] |
+      state.extra_regs.data_[839])
+    ;
+  else {
+    //ASSERT(this, 0) << "something disabled LWP";
+    //abort();
+  }
+  if ((state.extra_regs.data_[840] & 8) == 0) {
+    //ASSERT(this, 0) << "something disabled LWP";
+    //abort();
+  }
   state.prname = prname;
   state.thread_areas = thread_areas_;
   state.num_syscallbuf_bytes = num_syscallbuf_bytes;
