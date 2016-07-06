@@ -594,15 +594,18 @@ static void post_fork_child(void) {
 extern char _breakpoint_table_entry_start;
 extern char _breakpoint_table_entry_end;
 
+#if 0
 static unsigned long long lwpbuffer[1024];
 static unsigned long long realbuffer[1024];
+#endif
 
 /**
  * Initialize process-global buffering state, if enabled.
  */
 static void __attribute__((constructor)) init_process(void) {
   //struct sigaction sa;
-  lwpbuffer[0] = ((long long)sizeof(realbuffer) << 32ULL) | 0x80000008LL;
+#if 0
+  lwpbuffer[0] = ((long long)sizeof(realbuffer) << 32ULL) | 0xe000000cLL;
   lwpbuffer[1] = (unsigned long long)(long)realbuffer;
   lwpbuffer[2] = 0;
   lwpbuffer[3] = 0;
@@ -613,6 +616,7 @@ static void __attribute__((constructor)) init_process(void) {
   lwpbuffer[0x12] = 0x00ffffff01ffffff;
   lwpbuffer[0x13] = 0x00ffffff01ffffff;
   asm volatile("llwpcb %0" : : "r" (lwpbuffer));
+#endif
 
   struct rrcall_init_preload_params params;
   extern RR_HIDDEN void _syscall_hook_trampoline(void);
