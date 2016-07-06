@@ -202,8 +202,12 @@ static bool handle_ptrace_exit_event(RecordTask* t) {
 
   record_robust_futex_changes(t);
 
+  WaitStatus exit_status = t->get_ptrace_eventmsg<WaitStatus>();
   t->session().trace_writer().write_task_event(
-      TraceTaskEvent::for_exit(t->tid, t->get_ptrace_eventmsg<int>()));
+      TraceTaskEvent::for_exit(t->tid, exit_status));
+  if (t->task_group()->tgid == t->tid) {
+    t->task_group()->exit_status = exit_status;
+  }
 
   // Delete t. t's destructor writes the final EV_(UNSTABLE_)EXIT.
   t->destroy();
@@ -1454,7 +1458,9 @@ static string lookup_by_path(const string& name) {
       *next = 0;
     }
     string file = string(s) + "/" + name;
-    if (!access(file.c_str(), X_OK)) {
+    struct stat st;
+    if (!stat(file.c_str(), &st) && S_ISREG(st.st_mode) &&
+        !access(file.c_str(), X_OK)) {
       free(p);
       return file;
     }
@@ -1593,7 +1599,7 @@ RecordSession::RecordResult RecordSession::record_step() {
 
   if (can_end()) {
     result.status = STEP_EXITED;
-    result.exit_code = initial_task_group->exit_code;
+    result.exit_status = initial_task_group->exit_status;
     return result;
   }
 

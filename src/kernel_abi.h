@@ -539,7 +539,7 @@ struct BaseArch : public wordsize,
   struct msqid64_ds {
     ipc64_perm msg_perm;
     // These msg*time fields are really __kernel_time_t plus
-    // appropiate padding.  We don't touch the fields, though.
+    // appropriate padding.  We don't touch the fields, though.
     //
     // We do, however, suffix them with _only_little_endian to
     // urge anybody who does touch them to make sure the right
@@ -844,7 +844,7 @@ struct BaseArch : public wordsize,
   };
   RR_VERIFY_TYPE(ethtool_cmd);
 
-  struct flock {
+  struct _flock {
     signed_short l_type;
     signed_short l_whence;
     char __pad[sizeof(off_t) - 2 * sizeof(short)];
@@ -852,7 +852,7 @@ struct BaseArch : public wordsize,
     off_t l_len;
     pid_t l_pid;
   };
-  RR_VERIFY_TYPE(flock);
+  RR_VERIFY_TYPE_EXPLICIT(struct ::flock, _flock);
 
   struct flock64 {
     signed_short l_type;

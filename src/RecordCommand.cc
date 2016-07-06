@@ -3,6 +3,7 @@
 #include "RecordCommand.h"
 
 #include <assert.h>
+#include <sys/prctl.h>
 #include <sysexits.h>
 
 #include "preload/preload_interface.h"
@@ -10,6 +11,7 @@
 #include "Flags.h"
 #include "RecordSession.h"
 #include "StringVectorToCharArray.h"
+#include "WaitStatus.h"
 #include "kernel_metadata.h"
 #include "log.h"
 #include "main.h"
@@ -117,6 +119,25 @@ struct RecordFlags {
         ignore_nested(false) {}
 };
 
+static void parse_signal_name(ParsedOption& opt) {
+  if (opt.int_value != INT64_MIN) {
+    return;
+  }
+
+  for (int i = 1; i < _NSIG; i++) {
+    std::string signame = signal_name(i);
+    if (signame == opt.value) {
+      opt.int_value = i;
+      return;
+    }
+    assert(signame[0] == 'S' && signame[1] == 'I' && signame[2] == 'G');
+    if (signame.substr(3) == opt.value) {
+      opt.int_value = i;
+      return;
+    }
+  }
+}
+
 static bool parse_record_arg(vector<string>& args, RecordFlags& flags) {
   if (parse_global_option(args)) {
     return true;
@@ -159,6 +180,7 @@ static bool parse_record_arg(vector<string>& args, RecordFlags& flags) {
       flags.chaos = true;
       break;
     case 'i':
+      parse_signal_name(opt);
       if (!opt.verify_valid_int(1, _NSIG - 1)) {
         return false;
       }
@@ -187,6 +209,7 @@ static bool parse_record_arg(vector<string>& args, RecordFlags& flags) {
       flags.always_switch = true;
       break;
     case 't':
+      parse_signal_name(opt);
       if (!opt.verify_valid_int(1, _NSIG - 1)) {
         return false;
       }
@@ -256,7 +279,7 @@ static void setup_session_from_flags(RecordSession& session,
   }
 }
 
-static int record(const vector<string>& args, const RecordFlags& flags) {
+static WaitStatus record(const vector<string>& args, const RecordFlags& flags) {
   LOG(info) << "Start recording...";
 
   auto session = RecordSession::create(
@@ -281,18 +304,18 @@ static int record(const vector<string>& args, const RecordFlags& flags) {
   switch (step_result.status) {
     case RecordSession::STEP_CONTINUE:
       // SIGINT or something like that interrupted us.
-      return 0x80 | SIGINT;
+      return WaitStatus::for_fatal_sig(SIGINT);
 
     case RecordSession::STEP_EXITED:
-      return step_result.exit_code;
+      return step_result.exit_status;
 
     case RecordSession::STEP_SPAWN_FAILED:
       cerr << "\n" << step_result.failure_message << "\n";
-      return EX_UNAVAILABLE;
+      return WaitStatus::for_exit_code(EX_UNAVAILABLE);
 
     default:
       assert(0 && "Unknown exit status");
-      return -1;
+      return WaitStatus();
   }
 }
 
@@ -337,7 +360,20 @@ int RecordCommand::run(vector<string>& args) {
   assert_prerequisites(flags.use_syscall_buffer);
   check_performance_settings();
 
-  return record(args, flags);
+  WaitStatus status = record(args, flags);
+  switch (status.type()) {
+    case WaitStatus::EXIT:
+      return status.exit_code();
+    case WaitStatus::FATAL_SIGNAL:
+      signal(status.fatal_sig(), SIG_DFL);
+      prctl(PR_SET_DUMPABLE, 0);
+      kill(getpid(), status.fatal_sig());
+      break;
+    default:
+      FATAL() << "Don't know why we exited: " << status;
+      break;
+  }
+  return 1;
 }
 
 } // namespace rr

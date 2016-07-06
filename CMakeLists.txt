@@ -22,7 +22,7 @@ set(WILL_RUN_TESTS ON CACHE BOOL "Run tests")
 # debian is happy with it.  However, "_" is illegal in debs, while RPM
 # is cool with it.  Sigh.
 set(rr_VERSION_MAJOR 4)
-set(rr_VERSION_MINOR 2)
+set(rr_VERSION_MINOR 3)
 set(rr_VERSION_PATCH 0)
 
 add_definitions(-DRR_VERSION="${rr_VERSION_MAJOR}.${rr_VERSION_MINOR}.${rr_VERSION_PATCH}")
@@ -714,6 +714,7 @@ set(TESTS_WITH_PROGRAM
   dev_tty
   dlopen
   execve_loop
+  exit_codes
   exit_group
   exit_status
   explicit_checkpoints
@@ -1076,7 +1077,7 @@ elseif(${CMAKE_SYSTEM_PROCESSOR} MATCHES "arm.*")
   set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "arm")
 endif()
 
-# XXX Cmake 2.8.7 doesn't know how to avoid specifiying /usr,
+# XXX Cmake 2.8.7 doesn't know how to avoid specifying /usr,
 # /usr/bin, etc, as files to be installed, but distros are finicky
 # about their specification.  We want to manually filter those paths
 # out of our install list but 2.8.7 also isn't capable of that.

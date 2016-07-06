@@ -663,7 +663,7 @@ void AddressSpace::protect(remote_ptr<void> addr, size_t num_bytes, int prot) {
     LOG(debug) << "  protecting (" << rem << ") ...";
 
     Mapping m = move(mm);
-    mem.erase(m.map);
+    remove_from_map(m.map);
 
     // PROT_GROWSDOWN means that if this is a grows-down segment
     // (which for us means "stack") then the change should be
@@ -689,7 +689,7 @@ void AddressSpace::protect(remote_ptr<void> addr, size_t num_bytes, int prot) {
           m.map.subrange(m.map.start(), rem.start()),
           m.recorded_map.subrange(m.recorded_map.start(), rem.start()),
           m.emu_file, m.local_addr, move(monitored));
-      mem[underflow.map] = underflow;
+      add_to_map(underflow);
     }
     // Remap the overlapping region with the new prot.
     remote_ptr<void> new_end = min(rem.end(), m.map.end());
@@ -704,7 +704,7 @@ void AddressSpace::protect(remote_ptr<void> addr, size_t num_bytes, int prot) {
             ? m.monitored_shared_memory->subrange(new_start - m.map.start(),
                                                   new_end - new_start)
             : nullptr);
-    mem[overlap.map] = overlap;
+    add_to_map(overlap);
     last_overlap = overlap.map;
 
     // If the last segment we protect overflows the
@@ -719,7 +719,7 @@ void AddressSpace::protect(remote_ptr<void> addr, size_t num_bytes, int prot) {
               ? m.monitored_shared_memory->subrange(rem.end() - m.map.start(),
                                                     m.map.end() - rem.end())
               : nullptr);
-      mem[overflow.map] = overflow;
+      add_to_map(overflow);
     }
   };
   for_each_in_range(addr, num_bytes, protector, ITERATE_CONTIGUOUS);
@@ -984,7 +984,7 @@ void AddressSpace::unmap_internal(remote_ptr<void> addr, ssize_t num_bytes) {
     LOG(debug) << "  unmapping (" << rem << ") ...";
 
     Mapping m = move(mm);
-    mem.erase(m.map);
+    remove_from_map(m.map);
 
     LOG(debug) << "  erased (" << m.map << ") ...";
 
@@ -995,7 +995,7 @@ void AddressSpace::unmap_internal(remote_ptr<void> addr, ssize_t num_bytes) {
       Mapping underflow(m.map.subrange(m.map.start(), rem.start()),
                         m.recorded_map.subrange(m.map.start(), rem.start()),
                         m.emu_file, m.local_addr, move(monitored));
-      mem[underflow.map] = underflow;
+      add_to_map(underflow);
     }
     // If the last segment we unmap overflows the unmap
     // region, remap the overflow region.
@@ -1008,7 +1008,7 @@ void AddressSpace::unmap_internal(remote_ptr<void> addr, ssize_t num_bytes) {
               ? m.monitored_shared_memory->subrange(rem.end() - m.map.start(),
                                                     m.map.end() - rem.end())
               : nullptr);
-      mem[overflow.map] = overflow;
+      add_to_map(overflow);
     }
   };
   for_each_in_range(addr, num_bytes, unmapper);
@@ -1268,6 +1268,7 @@ AddressSpace::AddressSpace(Session* session, const AddressSpace& o,
       brk_end(o.brk_end),
       is_clone(true),
       mem(o.mem),
+      monitored_mem(o.monitored_mem),
       session_(session),
       vdso_start_addr(o.vdso_start_addr),
       monkeypatch_state(o.monkeypatch_state
@@ -1499,6 +1500,8 @@ void AddressSpace::coalesce_around(MemoryMap::iterator it) {
   new_m.flags = first_kv->second.flags;
   LOG(debug) << "  coalescing " << new_m.map;
 
+  // monitored-memory currently isn't coalescable so we don't need to
+  // adjust monitored_mem
   mem.erase(first_kv, ++last_kv);
 
   auto ins = mem.insert(MemoryMap::value_type(new_m.map, new_m));
@@ -1558,6 +1561,9 @@ void AddressSpace::map_and_coalesce(
     shared_ptr<MonitoredSharedMemory>&& monitored) {
   LOG(debug) << "  mapping " << m;
 
+  if (monitored) {
+    monitored_mem.insert(m.start());
+  }
   auto ins = mem.insert(MemoryMap::value_type(
       m, Mapping(m, recorded_map, emu_file, local_addr, move(monitored))));
   coalesce_around(ins.first);

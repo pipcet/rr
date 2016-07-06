@@ -175,7 +175,7 @@ inline std::ostream& operator<<(std::ostream& o, const KernelMapping& m) {
  * represents one byte within a mapping |b|, then |a| and |b| will be
  * considered equivalent.
  *
- * If |a| and |b| don't overlap, return true if |a|'s start addres is
+ * If |a| and |b| don't overlap, return true if |a|'s start address is
  * less than |b|'s/
  */
 struct MappingComparator {
@@ -452,6 +452,10 @@ public:
   Maps maps() const { return Maps(*this, remote_ptr<void>()); }
   Maps maps_starting_at(remote_ptr<void> start) { return Maps(*this, start); }
 
+  const std::set<remote_ptr<void> >& monitored_addrs() const {
+    return monitored_mem;
+  }
+
   /**
    * Change the protection bits of [addr, addr + num_bytes) to
    * |prot|.
@@ -536,7 +540,7 @@ public:
    */
   bool has_any_watchpoint_changes();
   /**
-   * Return true if an EXEC watchpoint has fired at addr since the lsat
+   * Return true if an EXEC watchpoint has fired at addr since the last
    * consume_watchpoint_changes.
    */
   bool has_exec_watchpoint_fired(remote_code_ptr addr);
@@ -547,7 +551,7 @@ public:
   std::vector<WatchConfig> consume_watchpoint_changes();
 
   /**
-   * Make [addr, addr + num_bytes) inaccesible within this
+   * Make [addr, addr + num_bytes) inaccessible within this
    * address space.
    */
   void unmap(remote_ptr<void> addr, ssize_t num_bytes);
@@ -758,6 +762,17 @@ private:
                         EmuFile::shr_ptr emu_file, void* local_addr,
                         std::shared_ptr<MonitoredSharedMemory>&& monitored);
 
+  void remove_from_map(const MemoryRange& range) {
+    mem.erase(range);
+    monitored_mem.erase(range.start());
+  }
+  void add_to_map(const Mapping& m) {
+    mem[m.map] = m;
+    if (m.monitored_shared_memory) {
+      monitored_mem.insert(m.map.start());
+    }
+  }
+
   /**
    * Call this only during recording.
    */
@@ -773,7 +788,7 @@ private:
    * can be multiple refcounts of multiple types set on a single
    * address, Breakpoint stores explicit USER and INTERNAL breakpoint
    * refcounts.  Clients adding/removing breakpoints at this addr must
-   * call ref()/unref() as appropropiate.
+   * call ref()/unref() as appropriate.
    */
   struct Breakpoint {
     Breakpoint() : internal_count(0), user_count(0) {}
@@ -910,6 +925,7 @@ private:
   bool is_clone;
   /* All segments mapped into this address space. */
   MemoryMap mem;
+  std::set<remote_ptr<void> > monitored_mem;
   /* madvise DONTFORK regions */
   std::set<MemoryRange> dont_fork;
   // The session that created this.  We save a ref to it so that

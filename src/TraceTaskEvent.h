@@ -12,6 +12,7 @@
 #include "ExtraRegisters.h"
 #include "PerfCounters.h"
 #include "TraceFrame.h"
+#include "WaitStatus.h"
 
 namespace rr {
 
@@ -22,19 +23,13 @@ class TraceTaskEvent {
 public:
   enum Type {
     NONE,
-    CLONE, // created by clone(2) syscall
-    FORK,  // created by fork(2) or vfork(2) syscalls
+    CLONE, // created by clone(2), fork(2), vfork(2) syscalls
     EXEC,
     EXIT
   };
 
   TraceTaskEvent(Type type = NONE, pid_t tid = 0) : type_(type), tid_(tid) {}
 
-  static TraceTaskEvent for_fork(pid_t tid, pid_t parent_tid) {
-    TraceTaskEvent result(FORK, tid);
-    result.parent_tid_ = parent_tid;
-    return result;
-  }
   static TraceTaskEvent for_clone(pid_t tid, pid_t parent_tid,
                                   uint32_t clone_flags) {
     TraceTaskEvent result(CLONE, tid);
@@ -49,7 +44,7 @@ public:
     result.cmd_line_ = cmd_line;
     return result;
   }
-  static TraceTaskEvent for_exit(pid_t tid, int exit_status) {
+  static TraceTaskEvent for_exit(pid_t tid, WaitStatus exit_status) {
     TraceTaskEvent result(EXIT, tid);
     result.exit_status_ = exit_status;
     return result;
@@ -58,7 +53,7 @@ public:
   Type type() const { return type_; }
   pid_t tid() const { return tid_; }
   pid_t parent_tid() const {
-    assert(type() == CLONE || type() == FORK);
+    assert(type() == CLONE);
     return parent_tid_;
   }
   uintptr_t clone_flags() const {
@@ -77,13 +72,9 @@ public:
     assert(type() == EXEC);
     return fds_to_close_;
   }
-  int exit_status() const {
+  WaitStatus exit_status() const {
     assert(type() == EXIT);
     return exit_status_;
-  }
-
-  bool is_fork() const {
-    return type() == FORK || (type() == CLONE && !(clone_flags() & CLONE_VM));
   }
 
   void set_fds_to_close(const std::vector<int> fds) {
@@ -102,7 +93,7 @@ private:
   std::string file_name_;             // EXEC only
   std::vector<std::string> cmd_line_; // EXEC only
   std::vector<int> fds_to_close_;     // EXEC only
-  int exit_status_;                   // EXIT only
+  WaitStatus exit_status_;            // EXIT only
 };
 
 } // namespace rr

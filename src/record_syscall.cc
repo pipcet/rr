@@ -2187,7 +2187,7 @@ static int ptrace_option_for_event(int ptrace_event) {
 
 template <typename Arch>
 static void prepare_clone(RecordTask* t, TaskSyscallState& syscall_state) {
-  uintptr_t flags = 0;
+  uintptr_t flags;
   CloneParameters params;
   Registers r = t->regs();
   int original_syscall = r.original_syscallno();
@@ -2209,9 +2209,10 @@ static void prepare_clone(RecordTask* t, TaskSyscallState& syscall_state) {
     }
   } else if (is_vfork_syscall(original_syscall, r.arch())) {
     ptrace_event = PTRACE_EVENT_VFORK;
-    flags = CLONE_VM;
+    flags = CLONE_VM | CLONE_VFORK | SIGCHLD;
   } else {
     ptrace_event = PTRACE_EVENT_FORK;
+    flags = SIGCHLD;
   }
 
   while (true) {
@@ -2285,13 +2286,9 @@ static void prepare_clone(RecordTask* t, TaskSyscallState& syscall_state) {
     }
     new_task->record_remote_even_if_null(child_params.ptid);
     new_task->record_remote_even_if_null(child_params.ctid);
-
-    t->session().trace_writer().write_task_event(
-        TraceTaskEvent::for_clone(new_task->tid, t->tid, flags));
-  } else {
-    t->session().trace_writer().write_task_event(
-        TraceTaskEvent::for_fork(new_task->tid, t->tid));
   }
+  t->session().trace_writer().write_task_event(
+      TraceTaskEvent::for_clone(new_task->tid, t->tid, flags));
 
   init_scratch_memory(new_task);
 
@@ -2421,14 +2418,10 @@ static Switchable rec_prepare_syscall_arch(RecordTask* t,
       return ALLOW_SWITCH;
 
     case Arch::exit:
-      if (t->task_group()->task_set().size() == 1) {
-        t->task_group()->exit_code = (int)t->regs().arg1();
-      }
       prepare_exit(t, (int)t->regs().arg1());
       return ALLOW_SWITCH;
 
     case Arch::exit_group:
-      t->task_group()->exit_code = (int)t->regs().arg1();
       if (t->task_group()->task_set().size() == 1) {
         prepare_exit(t, (int)t->regs().arg1());
         return ALLOW_SWITCH;
@@ -2495,14 +2488,14 @@ static Switchable rec_prepare_syscall_arch(RecordTask* t,
           break;
 
         case Arch::GETLK:
-          syscall_state.reg_parameter<typename Arch::flock>(3, IN_OUT);
+          syscall_state.reg_parameter<typename Arch::_flock>(3, IN_OUT);
           break;
 
         case Arch::GETLK64:
           // flock and flock64 better be different on 32-bit architectures,
           // but on 64-bit architectures, it's OK if they're the same.
           static_assert(
-              sizeof(typename Arch::flock) < sizeof(typename Arch::flock64) ||
+              sizeof(typename Arch::_flock) < sizeof(typename Arch::flock64) ||
                   Arch::elfclass == ELFCLASS64,
               "struct flock64 not declared differently from struct flock");
           syscall_state.reg_parameter<typename Arch::flock64>(3, IN_OUT);
@@ -3034,7 +3027,7 @@ static Switchable rec_prepare_syscall_arch(RecordTask* t,
 
         case PR_SET_DUMPABLE:
           if (t->regs().arg2() == 0) {
-            // Don't let processes make themslves undumpable. If a process
+            // Don't let processes make themselves undumpable. If a process
             // becomes undumpable, calling perf_event_open on it fails.
             Registers r = t->regs();
             r.set_arg1(intptr_t(-1));
