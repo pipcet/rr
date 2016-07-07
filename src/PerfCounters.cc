@@ -179,6 +179,7 @@ static void init_attributes() {
   }
 
   if (pmu->uses_lwp) {
+#if 0
     FILE *f = fopen("/sys/devices/lwp/type", "r");
     if (!f)
       FATAL() << "LWP events not found";
@@ -190,6 +191,7 @@ static void init_attributes() {
     fclose(f);
 
     init_perf_event_attr(&ticks_attr, (perf_type_id)type, 0);
+#endif
   } else {
     init_perf_event_attr(&ticks_attr, PERF_TYPE_RAW, pmu->rcb_cntr_event);
   }
@@ -210,6 +212,7 @@ const struct perf_event_attr& PerfCounters::ticks_attr() {
 }
 
 PerfCounters::PerfCounters(Task* task, pid_t tid, bool add_offset) : task(task), tid(tid), started(false) {
+  //printf("PerfCounters %d %p\n", tid, this);
   last_ticks_period = 0;
   saved_ticks = 0;
   ticks_read = add_offset ? LWP_OFFSET : 0;
@@ -218,6 +221,10 @@ PerfCounters::PerfCounters(Task* task, pid_t tid, bool add_offset) : task(task),
 
 static ScopedFd start_counter(pid_t tid, int group_fd,
                               struct perf_event_attr* attr) {
+  (void)tid;
+  (void)group_fd;
+  (void)attr;
+#if 0
   int fd = syscall(__NR_perf_event_open, attr, tid, -1, group_fd, 0);
   if (0 > fd) {
     if (errno == EACCES) {
@@ -234,6 +241,8 @@ static ScopedFd start_counter(pid_t tid, int group_fd,
     FATAL() << "Failed to start counter";
   }
   return fd;
+#endif
+  return -1;
 }
 
 void PerfCounters::reset(Ticks ticks_period) {
@@ -264,6 +273,7 @@ void PerfCounters::reset(Ticks ticks_period) {
   attr.sample_period = 1;
   fd_ticks = start_counter(tid, -1, &attr);
 
+#if 0
   struct f_owner_ex own;
   own.type = F_OWNER_TID;
   own.pid = tid;
@@ -283,6 +293,7 @@ void PerfCounters::reset(Ticks ticks_period) {
         start_counter(tid, group_leader, &instructions_retired_attr);
     fd_page_faults = start_counter(tid, group_leader, &page_faults_attr);
   }
+#endif
 
   //  printf("TP %ld+%ld\n", (long)ticks_period, ticks_read);
   started = true;
@@ -298,10 +309,12 @@ void PerfCounters::stop() {
   if (er.empty())
     ASSERT(this->task, 0) << "ER empty";
 
+#if 0
   fd_ticks.close();
   fd_page_faults.close();
   fd_hw_interrupts.close();
   fd_instructions_retired.close();
+#endif
 
   saved_ticks = read_ticks_nondestructively();
   last_ticks_period = 0;
