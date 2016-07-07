@@ -259,14 +259,15 @@ void PerfCounters::reset(Ticks ticks_period) {
   saved_ticks = read_ticks_nondestructively();
   last_ticks_period = ticks_period;
   if (er.getLWPU32(0) || er.getLWPU32(1)) {
-    er.setLWPU32(2, er.getLWPU32(2) | LWP_FLAGS);
-    er.setLWPU32(16 + LWP_EVENT, ticks_period);
+    er.setLWPU32(2, LWP_FLAGS);
     er.setLWPU32(7, LWP_FILTER);
+    er.setLWPU32(16 + LWP_EVENT, ticks_period);
     task->extra_registers_changed = true;
   } else {
     last_ticks_period = 0;
     saved_ticks = 0;
   }
+  //printf("ticks_read %ld -> %ld\n", ticks_read, saved_ticks);
   ticks_read = saved_ticks;
 
   struct perf_event_attr attr = rr::ticks_attr;
@@ -295,7 +296,7 @@ void PerfCounters::reset(Ticks ticks_period) {
   }
 #endif
 
-  //  printf("TP %ld+%ld\n", (long)ticks_period, ticks_read);
+  //printf("TP %ld+%ld\n", (long)ticks_period, ticks_read);
   started = true;
 }
 
@@ -317,8 +318,10 @@ void PerfCounters::stop() {
 #endif
 
   saved_ticks = read_ticks_nondestructively();
+  //printf("stop at %ld\n", saved_ticks);
   last_ticks_period = 0;
   er.setLWPU32(2, 0);
+  er.setLWPU32(7, 0);
   er.setLWPU32(16 + LWP_EVENT, 0);
   task->extra_registers_changed = true;
   //printf("stopped at %ld ticks\n", saved_ticks);
@@ -338,15 +341,17 @@ Ticks PerfCounters::read_ticks_nondestructively() {
     ASSERT(this->task, 0) << "ER empty";
   if (er.empty())
     abort();
-  if ((er.getLWPU32(0) || er.getLWPU32(1)) && (er.getLWPU32(2) & LWP_FLAGS)) {
+  if (er.getLWPU32(0) || er.getLWPU32(1)) {
     long counter_value = er.getLWPU32(16+LWP_EVENT);
 #if 0
     long diff = (last_ticks_period - counter_value) & 0xffff;
 #else
-    //printf("cv %ld ltp %ld\n", counter_value, last_ticks_period);
+    //printf("[pre] cv %ld ltp %ld\n", counter_value, last_ticks_period);
     counter_value |= (counter_value & 0x1000000) ? 0xffffffffff000000 : 0;
     //printf("cv %ld ltp %ld\n", counter_value, last_ticks_period);
+    assert(counter_value >= -2048);
     long diff = (last_ticks_period - counter_value);// & 0xffffff;
+    assert(diff >= 0);
 #endif
     long ret = saved_ticks;
     ret += diff;
