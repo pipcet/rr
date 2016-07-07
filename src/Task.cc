@@ -683,10 +683,11 @@ ExtraRegisters& Task::extra_regs() {
       extra_registers.data_.resize(xsave_area_size);
       struct iovec vec = { extra_registers.data_.data(),
                            extra_registers.data_.size() };
-      xptrace(PTRACE_GETREGSET, NT_X86_XSTATE, &vec);
+      ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec);
       ASSERT(this, vec.iov_len == xsave_area_size)
           << "Didn't get enough register data; expected " << xsave_area_size
           << " but got " << vec.iov_len;
+      //printf("read "); dump_er(extra_registers);
     } else {
 #if defined(__i386__)
       LOG(debug) << "  (refreshing extra-register cache using FPXREGS)";
