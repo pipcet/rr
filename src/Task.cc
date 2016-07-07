@@ -920,14 +920,6 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
         struct iovec vec2 = { extra_registers2.data_.data(), extra_registers2.data_.size() };
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
         //printf("overwriting "); dump_er(extra_registers2);
-        if (extra_registers2.getLWPU32(0) && !extra_registers.getLWPU32(0)) {
-          extra_registers.setLWPU32( 0, extra_registers2.getLWPU32( 0));
-          extra_registers.setLWPU32( 1, extra_registers2.getLWPU32( 1));
-          extra_registers.setLWPU32( 2, extra_registers2.getLWPU32( 2));
-          extra_registers.setLWPU32( 3, extra_registers2.getLWPU32( 3));
-          extra_registers.setLWPU32( 7, extra_registers2.getLWPU32( 7));
-          extra_registers.setLWPU32(18, extra_registers2.getLWPU32(18));
-        }
         //printf("writing "); dump_er(extra_registers);
         ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
