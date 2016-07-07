@@ -941,8 +941,10 @@ static void apply_mprotect_records(ReplayTask* t,
       }
       t->vm()->protect(r.start, r.size, r.prot);
     }
-    vector<uint8_t> ignored;
-    t->trace_reader().read_generic(ignored);
+    if (skip_mprotect_records == 0) {
+      vector<uint8_t> ignored;
+      t->trace_reader().read_generic(ignored);
+    }
   }
 }
 
