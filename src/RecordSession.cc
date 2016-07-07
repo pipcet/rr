@@ -420,7 +420,7 @@ void RecordSession::task_continue(const StepState& step_state) {
     } else {
       ticks_request = (TicksRequest)max<Ticks>(
           0, scheduler().current_timeslice_end() - t->tick_count());
-      if (ticks_request > 0xfffff)
+      if (ticks_request > 0xffffff)
         ticks_request = (TicksRequest)0xffffff;
     }
     bool singlestep =
