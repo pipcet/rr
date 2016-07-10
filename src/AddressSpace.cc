@@ -286,8 +286,6 @@ void AddressSpace::map_lwp_area(Task* t) {
   int prot = PROT_READ | PROT_WRITE;
   int flags = MAP_PRIVATE | MAP_ANONYMOUS | MAP_FIXED;
 
-  struct stat fstat;
-  string file_name;
   {
     AutoRemoteSyscalls remote(t);
 
@@ -333,8 +331,7 @@ void AddressSpace::map_lwp_area(Task* t) {
     t->set_extra_regs(t->extra_regs());
   }
 
-  map(lwp_area_start(), lwp_area_size(), prot, flags, 0, file_name, fstat.st_dev,
-      fstat.st_ino);
+  map(lwp_area_start(), lwp_area_size(), prot, flags, 0, "", 0, 0);
 }
 
 /**
