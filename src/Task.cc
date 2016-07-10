@@ -642,7 +642,7 @@ const Registers& Task::regs() const {
 }
 
 // 0 means XSAVE not detected
-static unsigned int xsave_area_size = 0;
+unsigned int xsave_area_size = 0;
 static unsigned long xsave_features;
 static unsigned int xsave_lwp_size;
 static unsigned int xsave_lwp_off;
@@ -687,7 +687,7 @@ ExtraRegisters& Task::extra_regs() {
       ASSERT(this, vec.iov_len == xsave_area_size)
           << "Didn't get enough register data; expected " << xsave_area_size
           << " but got " << vec.iov_len;
-      //printf("read "); dump_er(extra_registers);
+      printf("read "); dump_er(extra_registers);
     } else {
 #if defined(__i386__)
       LOG(debug) << "  (refreshing extra-register cache using FPXREGS)";
@@ -894,36 +894,28 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
 
   ASSERT(this, !regs.empty()) << "Trying to set empty ExtraRegisters";
 
-  std::vector<uint8_t> old_data;
-  old_data.resize(xsave_area_size);
-  for (size_t i = 0; i < xsave_area_size; i++) {
-    if (i >= xsave_lwp_off && i < xsave_lwp_size + xsave_lwp_off)
-      old_data[i] = extra_registers.data_[i];
-  }
+  init_xsave();
   extra_registers = regs;
-  for (size_t i = 0; i < xsave_area_size; i++) {
-    if (i >= xsave_lwp_off && i < xsave_lwp_size + xsave_lwp_off)
-      extra_registers.data_[i] = old_data[i];
-  }
+
   extra_registers_known = true;
   extra_registers_changed = false;
-
-  init_xsave();
 
   switch (extra_registers.format()) {
     case ExtraRegisters::XSAVE: {
       if (xsave_area_size) {
+        assert(extra_registers.data_.size() == xsave_area_size);
+        extra_registers.data_.data()[512] |= 0xff;
         extra_registers.data_.data()[512+7] |= 0x40;
         ExtraRegisters extra_registers2;
         extra_registers2.data_.resize(xsave_area_size);
         struct iovec vec = { extra_registers.data_.data(), regs.data_.size() };
         struct iovec vec2 = { extra_registers2.data_.data(), extra_registers2.data_.size() };
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
-        //printf("overwriting "); dump_er(extra_registers2);
-        //printf("writing "); dump_er(extra_registers);
+        printf("overwriting "); dump_er(extra_registers2);
+        printf("writing "); dump_er(extra_registers);
         ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
-        //printf("wrote "); dump_er(extra_registers2);
+        printf("wrote "); dump_er(extra_registers2);
       } else {
 #if defined(__i386__)
         ptrace_if_alive(PTRACE_SETFPXREGS, nullptr,

@@ -236,6 +236,8 @@ static ScopedFd start_counter(pid_t tid, int group_fd,
   return fd;
 }
 
+extern unsigned int xsave_area_size;
+  
 void PerfCounters::reset(Ticks ticks_period) {
   assert(ticks_period >= 0);
 
@@ -243,6 +245,7 @@ void PerfCounters::reset(Ticks ticks_period) {
 
   ExtraRegisters& er = task->extra_regs();
   assert(!er.empty());
+  assert(er.data().size() == xsave_area_size);
 
   if (ticks_period > 0xffffff)
     ticks_period = 0xffffff;

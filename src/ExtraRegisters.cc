@@ -318,6 +318,7 @@ void ExtraRegisters::set_user_fpxregs_struct(
 unsigned ExtraRegisters::getLWPU32(size_t index)
 {
   unsigned ret;
+  assert(data_.size() == 960);
 
   memcpy(&ret, data_.data() + 832 + index * 4, 4);
 
@@ -326,12 +327,14 @@ unsigned ExtraRegisters::getLWPU32(size_t index)
 
 void ExtraRegisters::setLWPU32(size_t index, unsigned value)
 {
+  assert(data_.size() == 960);
   memcpy(data_.data() + 832 + index * 4, &value, 4);
   //printf("changed "); dump();
 }
 
 remote_ptr<unsigned long> ExtraRegisters::dump()
 {
+  assert(data_.size() == 960);
 #if 0
   printf("ER: %08x %08x %08x %08x %08x %08x %08x\n",
          getLWPU32(0), getLWPU32(2), getLWPU32(7), getLWPU32(18),

@@ -3,7 +3,7 @@
  * 0x4000000 - LwpPTSC: performance time stamp counter in event record
  * 0x2000000 - LwpCont: continuous mode sampling. This is required(?!).
  */
-#define LWP_FLAGS 0xe0000008L
+#define LWP_FLAGS 0x80000008L
 #define LWP_EVENT          2L
 #define LWP_FILTER 0x28000000L
 #define LWP_OFFSET 0
