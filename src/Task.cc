@@ -731,7 +731,8 @@ void Task::dump_er(ExtraRegisters& er)
   ptr = er.getLWPU32(0);
 
   //fallible_ptrace(PTRACE_POKEDATA, ptr + 2, (void *)0x00000020);
-  
+
+  if (0)
   if (ptr) {
     for (int i = 0; i < 8; i++) {
       unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);

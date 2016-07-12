@@ -341,8 +341,12 @@ remote_ptr<unsigned long> ExtraRegisters::dump()
          getLWPU32(5), getLWPU32(4), getLWPU32(3));
 #else
   printf("ER:");
-  for (ssize_t i = (512-832)/4; i < (512-832+64)/4; i++)
+  for (ssize_t i = (0-832)/4; i < (512-832+64)/4; i++) {
+    if (i % 16 == 0) {
+      printf(" [%lx]", (i * 4) + 832);
+    }
     printf(" %x", getLWPU32(size_t(i)));
+  }
   for (size_t i = 0; i < 32; i++)
     printf(" %x", getLWPU32(i));
   printf("\n");
