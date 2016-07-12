@@ -893,6 +893,7 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
     return;
 
   ASSERT(this, !regs.empty()) << "Trying to set empty ExtraRegisters";
+  ASSERT(this, regs.data_.size() == xsave_area_size);
 
   init_xsave();
   extra_registers = regs;
@@ -904,17 +905,23 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
     case ExtraRegisters::XSAVE: {
       if (xsave_area_size) {
         assert(extra_registers.data_.size() == xsave_area_size);
-        extra_registers.data_.data()[512] |= 0xff;
+        //memset(extra_registers.data_.data(), 0xff, 512);
+        //memset(extra_registers.data_.data() + 512 + 64, 0xff, 832 - 512 - 64);
+        extra_registers.data_.data()[512] = 7;
         extra_registers.data_.data()[512+7] |= 0x40;
         ExtraRegisters extra_registers2;
         extra_registers2.data_.resize(xsave_area_size);
         struct iovec vec = { extra_registers.data_.data(), regs.data_.size() };
         struct iovec vec2 = { extra_registers2.data_.data(), extra_registers2.data_.size() };
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
+        assert(extra_registers.data_.size() == xsave_area_size);
         printf("overwriting "); dump_er(extra_registers2);
+        assert(extra_registers2.data_.size() == xsave_area_size);
         printf("writing "); dump_er(extra_registers);
         ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
+        assert(extra_registers.data_.size() == xsave_area_size);
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
+        assert(extra_registers2.data_.size() == xsave_area_size);
         printf("wrote "); dump_er(extra_registers2);
       } else {
 #if defined(__i386__)
