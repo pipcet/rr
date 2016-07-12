@@ -727,6 +727,25 @@ void Task::dump_er(ExtraRegisters& er)
     printf("event@%lx: %016lx %016lx %016lx %016lx\n",
            ptr.as_int(), w0, w1, w2, w3);
   }
+
+  ptr = er.getLWPU32(0);
+
+  //fallible_ptrace(PTRACE_POKEDATA, ptr + 2, (void *)0x00000020);
+  
+  if (ptr) {
+    for (int i = 0; i < 8; i++) {
+      unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
+      unsigned long w1 = fallible_ptrace(PTRACE_PEEKDATA, ptr+1, nullptr);
+      unsigned long w2 = fallible_ptrace(PTRACE_PEEKDATA, ptr+2, nullptr);
+      unsigned long w3 = fallible_ptrace(PTRACE_PEEKDATA, ptr+3, nullptr);
+
+      printf("lwpcb@%lx: %016lx %016lx %016lx %016lx\n",
+             ptr.as_int(), w0, w1, w2, w3);
+
+      ptr += 32/8;
+    }
+  }
+    
 }
   
 static ssize_t dr_user_word_offset(size_t i) {
