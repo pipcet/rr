@@ -235,9 +235,12 @@ void Registers::retify(const Task *task) {
   if (u.x64regs.rip == 0x70000002)
     return;
 
-  if (!(u.x64regs.rip >= 0x400000 && u.x64regs.rip <= 0x50000))
+  if (!(u.x64regs.rip >= 0x400000 && u.x64regs.rip <= 0x500000))
     return;
 
+  printf("changing %lx to 0x70000002, rsp %lx\n",
+         u.x64regs.rip, u.x64regs.rsp);
+  
   u.x64regs.rsp -= 8;
   const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(u.x64regs.rip));
   u.x64regs.rip = 0x70000002;

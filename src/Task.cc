@@ -951,6 +951,7 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
         assert(extra_registers2.data_.size() == xsave_area_size);
         printf("wrote "); dump_er(extra_registers2);
+        set_regs(registers);
         printf("standard regs: "); registers.print_register_file(stdout);
       } else {
 #if defined(__i386__)
