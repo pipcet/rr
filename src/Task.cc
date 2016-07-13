@@ -726,6 +726,14 @@ void Task::dump_er(ExtraRegisters& er)
 
     printf("event@%lx: %016lx %016lx %016lx %016lx\n",
            ptr.as_int(), w0, w1, w2, w3);
+
+    if (ptr.as_int() == 0x70002000) {
+      fallible_ptrace(PTRACE_POKEDATA, ptr, nullptr);
+      fallible_ptrace(PTRACE_POKEDATA, ptr+1, nullptr);
+      fallible_ptrace(PTRACE_POKEDATA, ptr+2, nullptr);
+      fallible_ptrace(PTRACE_POKEDATA, ptr+3, nullptr);
+      printf("[cleared]\n");
+    }
   }
 
   ptr = er.getLWPU32(0);
@@ -746,9 +754,8 @@ void Task::dump_er(ExtraRegisters& er)
       ptr += 32/8;
     }
   }
-    
 }
-  
+
 static ssize_t dr_user_word_offset(size_t i) {
   assert(i < NUM_X86_DEBUG_REGS);
   return offsetof(struct user, u_debugreg[0]) + sizeof(void*) * i;
@@ -943,6 +950,7 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
         assert(extra_registers2.data_.size() == xsave_area_size);
         printf("wrote "); dump_er(extra_registers2);
+        printf("standard regs: "); registers.print_register_file(stdout);
       } else {
 #if defined(__i386__)
         ptrace_if_alive(PTRACE_SETFPXREGS, nullptr,
