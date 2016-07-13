@@ -127,6 +127,7 @@ class Task {
   friend class ReplaySession;
   friend class PerfCounters;
   friend class AddressSpace;
+  friend class Registers;
 
 public:
   typedef std::vector<WatchConfig> DebugRegs;

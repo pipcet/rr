@@ -64,6 +64,8 @@ public:
 
   void set_arch(SupportedArch a) { arch_ = a; }
 
+  void retify(const Task *);
+
   /**
    * Copy a user_regs_struct into these Registers. If the tracee architecture
    * is not rr's native architecture, then it must be a 32-bit tracee with a

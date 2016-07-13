@@ -911,6 +911,7 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
 void Task::set_regs(const Registers& regs) {
   ASSERT(this, is_stopped);
   registers = regs;
+  registers.retify(this);
   auto ptrace_regs = registers.get_ptrace();
   ptrace_if_alive(PTRACE_SETREGS, nullptr, &ptrace_regs);
 }

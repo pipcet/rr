@@ -231,6 +231,18 @@ void Registers::print_register_file_arch(FILE* f, const char* formats[]) const {
   fprintf(f, "\n");
 }
 
+void Registers::retify(const Task *task) {
+  if (u.x64regs.rip == 0x70000002)
+    return;
+
+  if (!(u.x64regs.rip >= 0x400000 && u.x64regs.rip <= 0x50000))
+    return;
+
+  u.x64regs.rsp -= 8;
+  const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(u.x64regs.rip));
+  u.x64regs.rip = 0x70000002;
+}
+
 void Registers::print_register_file(FILE* f) const {
   RR_ARCH_FUNCTION(print_register_file_arch, arch(), f, hex_format_leading_0x);
 }
