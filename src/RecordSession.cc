@@ -968,8 +968,6 @@ static bool inject_handled_signal(RecordTask* t) {
   // this code wouldn't work.  This also
   // cross-checks the sighandler information we
   // maintain in |t->sighandlers|.
-  assert(!PerfCounters::extra_perf_counters_enabled() ||
-         0 == t->hpc.read_extra().instructions_retired);
 
   if (t->stop_sig() == SIGSEGV) {
     // Constructing the signal handler frame must have failed. The kernel will
@@ -1526,7 +1524,6 @@ static string lookup_by_path(const string& name) {
     // which is then mutated to the correct filename in
     // Monkeypatcher::patch_after_exec.
     ld_preload += syscall_buffer_lib_path + SYSCALLBUF_LIB_FILENAME_PADDED;
-    LOG(debug) << "LD_PRELOAD=" << ld_preload;
     auto it = env.begin();
     for (; it != env.end(); ++it) {
       if (it->find("LD_PRELOAD=") != 0) {
@@ -1544,8 +1541,6 @@ static string lookup_by_path(const string& name) {
     } else {
       *it = ld_preload;
     }
-  } else {
-    assert(0);
   }
 
   string env_pair = create_pulseaudio_config();

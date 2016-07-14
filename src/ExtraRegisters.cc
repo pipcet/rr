@@ -332,32 +332,4 @@ void ExtraRegisters::setLWPU32(size_t index, unsigned value)
   //printf("changed "); dump();
 }
 
-remote_ptr<unsigned long> ExtraRegisters::dump()
-{
-  assert(data_.size() == 960);
-#if 0
-  printf("ER: %08x %08x %08x %08x %08x %08x %08x\n",
-         getLWPU32(0), getLWPU32(2), getLWPU32(7), getLWPU32(18),
-         getLWPU32(5), getLWPU32(4), getLWPU32(3));
-#else
-  printf("ER:");
-  for (ssize_t i = (0-832)/4; i < (512-832+64)/4; i++) {
-    if (i % 16 == 0) {
-      printf(" [%lx]", (i * 4) + 832);
-    }
-    printf(" %x", getLWPU32(size_t(i)));
-  }
-  for (size_t i = 0; i < 32; i++)
-    printf(" %x", getLWPU32(i));
-  printf("\n");
-#endif
-
-  unsigned long bufbase = (long(getLWPU32(5))<<32) + getLWPU32(4);
-  unsigned long ret = bufbase + getLWPU32(3) - 32;
-
-  if (bufbase)
-    return remote_ptr<unsigned long>(ret);
-  else
-    return remote_ptr<unsigned long>(nullptr);
-}
 } // namespace rr

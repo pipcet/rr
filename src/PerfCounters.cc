@@ -289,7 +289,6 @@ void PerfCounters::reset(Ticks ticks_period) {
     fd_page_faults = start_counter(tid, group_leader, &page_faults_attr);
   }
 
-  //printf("TP %ld+%ld\n", (long)ticks_period, ticks_read);
   started = true;
 }
 
@@ -309,7 +308,6 @@ void PerfCounters::stop() {
   fd_instructions_retired.close();
 
   saved_ticks = read_ticks_nondestructively();
-  //printf("stop at %ld\n", saved_ticks);
   last_ticks_period = 0;
   er.setLWPU32(2, 0);
   er.setLWPU32(3, 0);

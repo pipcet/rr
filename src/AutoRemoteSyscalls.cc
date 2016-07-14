@@ -144,7 +144,7 @@ void AutoRemoteSyscalls::syscall_helper(SyscallWaiting wait, int syscallno,
 
   ASSERT(t, t->regs().ip() - callregs.ip() ==
                 syscall_instruction_length(t->arch()))
-    << "Should have advanced ip " << t->regs().ip() << " by one syscall_insn";
+      << "Should have advanced ip by one syscall_insn";
 
   ASSERT(t, t->regs().original_syscallno() == syscallno)
       << "Should be entering " << t->syscall_name(syscallno)
