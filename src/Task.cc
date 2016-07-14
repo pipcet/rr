@@ -689,7 +689,6 @@ ExtraRegisters& Task::extra_regs() {
       ASSERT(this, vec.iov_len == xsave_area_size)
           << "Didn't get enough register data; expected " << xsave_area_size
           << " but got " << vec.iov_len;
-      printf("read "); dump_er(extra_registers);
     } else {
 #if defined(__i386__)
       LOG(debug) << "  (refreshing extra-register cache using FPXREGS)";
@@ -962,7 +961,6 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
         struct iovec vec2 = { extra_registers2.data_.data(), extra_registers2.data_.size() };
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
         assert(extra_registers.data_.size() == xsave_area_size);
-        printf("overwriting "); dump_er(extra_registers2);
         assert(extra_registers2.data_.size() == xsave_area_size);
         printf("writing "); dump_er(extra_registers);
         ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
@@ -1329,7 +1327,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
   // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
   // whatever they pick up something spurious later.
   lwp.stop();
-  LOG(debug) << "ticks = " << more_ticks << " + " << ticks;
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
 
@@ -1342,7 +1339,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
     struct user_regs_struct ptrace_regs;
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
       registers.set_from_ptrace(ptrace_regs);
-      printf("read standard regs: "); registers.print_register_file(stdout);
       did_read_regs = true;
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
@@ -1630,23 +1626,6 @@ Task::CapturedState Task::capture_state() {
   state.serial = serial;
   state.regs = regs();
   state.extra_regs = extra_regs();
-  if (state.extra_regs.data_[832] |
-      state.extra_regs.data_[833] |
-      state.extra_regs.data_[834] |
-      state.extra_regs.data_[835] |
-      state.extra_regs.data_[836] |
-      state.extra_regs.data_[837] |
-      state.extra_regs.data_[838] |
-      state.extra_regs.data_[839])
-    ;
-  else {
-    //ASSERT(this, 0) << "something disabled LWP";
-    //abort();
-  }
-  if ((state.extra_regs.data_[840] & 8) == 0) {
-    //ASSERT(this, 0) << "something disabled LWP";
-    //abort();
-  }
   state.prname = prname;
   state.thread_areas = thread_areas_;
   state.num_syscallbuf_bytes = num_syscallbuf_bytes;

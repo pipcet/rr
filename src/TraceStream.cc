@@ -526,7 +526,6 @@ bool TraceReader::read_raw_data_for_frame(const TraceFrame& frame, RawData& d) {
 void TraceWriter::write_generic(const void* d, size_t len) {
   auto& generic = writer(GENERIC);
   generic << global_time << len;
-  //printf("global_time %d\n", (int)global_time);
   generic.write(d, len);
 }
 
@@ -535,8 +534,6 @@ void TraceReader::read_generic(vector<uint8_t>& out) {
   TraceFrame::Time time;
   size_t num_bytes;
   generic >> time >> num_bytes;
-  //printf("time %d global_time %d num_bytes %d\n", (int)time, (int)global_time,
-  //       (int) num_bytes);
   assert(time == global_time);
   out.resize(num_bytes);
   generic.read((char*)out.data(), num_bytes);
