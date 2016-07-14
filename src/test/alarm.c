@@ -12,6 +12,8 @@ void catcher(__attribute__((unused)) int signum,
   caught_sig = signum;
 }
 
+volatile int *okp = (int *)0x70003000;
+
 int main(void) {
   struct sigaction sact;
   int counter;
@@ -21,11 +23,17 @@ int main(void) {
   sact.sa_sigaction = catcher;
   sigaction(SIGALRM, &sact, NULL);
 
-  alarm(1); /* timer will pop in 1 second */
+  alarm(5); /* timer will pop in 1 second */
 
   for (counter = 0; counter >= 0 && !caught_sig; counter++) {
-    if (counter % 100000 == 0) {
-      write(STDOUT_FILENO, ".", 1);
+    void *out;
+    asm volatile("slwpcb %0" : "=r" (out) : : "flags", "memory");
+    if (out)
+      (*okp)++;
+    else {
+      atomic_printf("{{{LWP state cleared, counter %d, okcounter %d}}}",
+                    counter, *okp);
+      asm volatile("llwpcb %0" : : "r" (0x70001000) : "flags", "memory");
     }
   }
 

@@ -738,6 +738,15 @@ void Task::dump_er(ExtraRegisters& er)
 
   ptr = er.getLWPU32(0);
 
+  if (ptr) {
+    ptr += 8192/8;
+    unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
+
+    printf("counter@%lx: %016lx\n",
+           ptr.as_int(), w0);
+  }
+    
+  
   //fallible_ptrace(PTRACE_POKEDATA, ptr + 2, (void *)0x00000020);
 
   if (0)
