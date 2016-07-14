@@ -89,12 +89,6 @@ namespace rr {
 
     bool lwp_xsave_to_lwpcb();
 
-    void init_xsave(unsigned int area_size, unsigned int lwp_off, unsigned int lwp_size) {
-      xsave_area_size = area_size;
-      xsave_lwp_off = lwp_off;
-      xsave_lwp_size = lwp_size;
-    }
-    
     /* This choice is fairly arbitrary; linux doesn't use SIGSTKFLT so we
      * hope that tracees don't either. */
     enum { TIME_SLICE_SIGNAL = SIGSTKFLT };
