@@ -865,11 +865,11 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string());
   address_of_last_execution_resume = ip();
+  if (extra_registers_changed)
+    set_extra_regs(extra_registers);
   how_last_execution_resumed = how;
   set_debug_status(0);
 
-  if (extra_registers_changed)
-    set_extra_regs(extra_registers);
   pid_t wait_ret = 0;
   if (session().is_recording()) {
     /* There's a nasty race where a stopped task gets woken up by a SIGKILL
@@ -912,8 +912,10 @@ void Task::set_regs(const Registers& regs) {
   ASSERT(this, is_stopped);
   registers = regs;
   registers.retify(this);
+  registers.clear_resume_flag();
   auto ptrace_regs = registers.get_ptrace();
   ptrace_if_alive(PTRACE_SETREGS, nullptr, &ptrace_regs);
+  printf("standard regs: "); registers.print_register_file(stdout);
 }
 
 void Task::set_extra_regs(const ExtraRegisters& regs) {
@@ -952,7 +954,7 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
         assert(extra_registers2.data_.size() == xsave_area_size);
         printf("wrote "); dump_er(extra_registers2);
         set_regs(registers);
-        printf("standard regs: "); registers.print_register_file(stdout);
+        printf("debug status: "); printf("%lx\n", get_debug_reg(7));
       } else {
 #if defined(__i386__)
         ptrace_if_alive(PTRACE_SETFPXREGS, nullptr,
@@ -1323,6 +1325,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
     struct user_regs_struct ptrace_regs;
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
       registers.set_from_ptrace(ptrace_regs);
+      printf("read standard regs: "); registers.print_register_file(stdout);
       did_read_regs = true;
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
@@ -1346,7 +1349,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
     seen_ptrace_exit_event = true;
   }
 
-  bool need_to_set_regs = false;
+  bool need_to_set_regs = true;
   if (registers.singlestep_flag()) {
     registers.clear_singlestep_flag();
     need_to_set_regs = true;
