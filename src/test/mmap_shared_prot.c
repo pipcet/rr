@@ -28,9 +28,13 @@ int main(void) {
 
   test_assert(0 == mprotect(p, PAGE_SIZE, PROT_READ));
 
-  breakpoint();
+  test_assert(0 == mprotect(p, PAGE_SIZE, PROT_READ | PROT_WRITE));
+
+  test_assert(0 == mprotect(p, PAGE_SIZE, PROT_READ));
 
   test_assert(0 == mprotect(p, PAGE_SIZE, PROT_READ | PROT_WRITE));
+
+  breakpoint();
 
   *p = *p + 1;
 

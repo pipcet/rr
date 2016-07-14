@@ -59,7 +59,8 @@ static const unsigned int NUM_X86_WATCHPOINTS = 4;
 
 Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
            SupportedArch a)
-    : unstable(false),
+    : rr_page_mapped(false),
+      unstable(false),
       stable_exit(false),
       thread_locals_initialized(false),
       scratch_ptr(),
@@ -878,8 +879,10 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   how_last_execution_resumed = how;
   set_debug_status(0);
 
-  if (how == RESUME_CONT)
+  if (how == RESUME_CONT) {
     sync_lwp_state();
+    set_regs(registers);
+  }
 
   pid_t wait_ret = 0;
   if (session().is_recording()) {

@@ -256,13 +256,17 @@ void Registers::lwpretify(const Task *task) {
   lwpop(task);
 }
 
-void Registers::lwpretify2(const Task *task) {
+void Registers::lwpretify2(const Task *task2) {
+  Task *task = const_cast<Task*>(task2);
   uintptr_t rip = u.x64regs.rip;
+  if (task->is_in_rr_page() || !task->rr_page_mapped)
+    return;
   u.x64regs.rip = RR_PAGE_LWP+3;
-  u.x64regs.rsp -= 128 + 8;
-  printf("wrote rip %lx to rsp %lx\n", rip, u.x64regs.rsp);
+  u.x64regs.rsp -= 128 + 8 /* 16 */;
   
+  //  const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(0x33));
   const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(rip));
+  printf("wrote rip %lx to rsp %lx\n", rip, u.x64regs.rsp);
 }
 
 void Registers::lwpop(const Task *task) {
