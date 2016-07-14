@@ -48,6 +48,7 @@
 #include "record_signal.h"
 #include "seccomp-bpf.h"
 #include "util.h"
+#include "LWP.h"
 
 using namespace std;
 
@@ -736,20 +737,9 @@ void Task::dump_er(ExtraRegisters& er)
     }
   }
 
-  ptr = er.getLWPU32(0);
-
-  if (ptr) {
-    ptr += 8192/8;
-    unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
-
-    printf("counter@%lx: %016lx\n",
-           ptr.as_int(), w0);
-  }
-    
-  
   //fallible_ptrace(PTRACE_POKEDATA, ptr + 2, (void *)0x00000020);
 
-  if (0)
+  ptr = er.getLWPU32(0);
   if (ptr) {
     for (int i = 0; i < 8; i++) {
       unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
@@ -762,6 +752,15 @@ void Task::dump_er(ExtraRegisters& er)
 
       ptr += 32/8;
     }
+  }
+  ptr = er.getLWPU32(0);
+
+  if (ptr) {
+    ptr += 8192/8;
+    unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
+
+    printf("counter@%lx: %016lx\n",
+           ptr.as_int(), w0);
   }
 }
 
@@ -879,6 +878,9 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   how_last_execution_resumed = how;
   set_debug_status(0);
 
+  if (how == RESUME_CONT)
+    sync_lwp_state();
+
   pid_t wait_ret = 0;
   if (session().is_recording()) {
     /* There's a nasty race where a stopped task gets woken up by a SIGKILL
@@ -917,10 +919,62 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   }
 }
 
+void Task::sync_lwp_state() {
+  registers.lwpretify2(this);
+  if ((extra_registers.getLWPU32(2) & 0x80000008) != 0x80000008) {
+    printf("warning: LWP flags %08x, should be 0x80000008\n",
+           extra_registers.getLWPU32(2));
+    extra_registers.setLWPU32(2, 0x80000008);
+  }
+  fallible_ptrace(PTRACE_POKEDATA, 0x70001000, reinterpret_cast<void *>(0x200000000000LL + extra_registers.getLWPU32(2)));
+  fallible_ptrace(PTRACE_POKEDATA, 0x70001010, 0);
+  fallible_ptrace(PTRACE_POKEDATA, 0x70001020, reinterpret_cast<void *>((long)LWP_FILTER<<32));
+  fallible_ptrace(PTRACE_POKEDATA, 0x70001090, reinterpret_cast<void *>(0x1ffffff + ((long)extra_registers.getLWPU32(18)<<32)));
+#if 0
+  int attempts = 0;
+  do {
+    extra_registers_changed = true;
+    extra_registers.data_.data()[840] |= 8;
+    extra_registers.data_.data()[843] |= 8;
+    if ((attempts&1) == 0) {
+      printf("single-stepping\n");
+      ptrace_if_alive(PTRACE_SINGLESTEP, nullptr, nullptr);
+      pid_t ret;
+      int raw_status = 0;
+      do {
+        ret = waitpid(tid, &raw_status, __WALL);
+      } while (ret != tid);
+      
+      set_extra_regs(extra_registers);
+    } else {
+      printf("spinning\n");
+      pid_t ret;
+      int raw_status = 0;
+      ptrace_if_alive(PTRACE_CONT, nullptr, nullptr);
+      usleep(50000);
+      ptrace_if_alive(PTRACE_INTERRUPT, nullptr, nullptr);
+      do {
+        ret = waitpid(tid, &raw_status, __WALL);
+      } while (ret != tid);
+      
+      set_extra_regs(extra_registers);
+    }
+    extra_registers_known = false;
+    if (attempts > 4)
+    if (extra_regs().data_.data()[840] & 8) {
+      printf("attempt %d succeeded\n", attempts);
+      break;
+    }
+    printf("attempt %d failed\n", attempts);
+  } while(attempts++ < 100);
+  registers.lwpop(this);
+#endif
+}
+  
 void Task::set_regs(const Registers& regs) {
   ASSERT(this, is_stopped);
   registers = regs;
-  registers.retify(this);
+  //registers.retify(this);
   registers.clear_resume_flag();
   auto ptrace_regs = registers.get_ptrace();
   ptrace_if_alive(PTRACE_SETREGS, nullptr, &ptrace_regs);

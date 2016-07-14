@@ -429,6 +429,8 @@ public:
   /** Set the tracee's extra registers to |regs|. */
   void set_extra_regs(const ExtraRegisters& regs);
 
+  void sync_lwp_state();
+
   /**
    * Program the debug registers to the vector of watchpoint
    * configurations in |reg| (also updating the debug control

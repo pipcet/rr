@@ -65,6 +65,9 @@ public:
   void set_arch(SupportedArch a) { arch_ = a; }
 
   void retify(const Task *);
+  void lwpretify(const Task *);
+  void lwpretify2(const Task *);
+  void lwpop(const Task *);
 
   /**
    * Copy a user_regs_struct into these Registers. If the tracee architecture
@@ -292,7 +295,7 @@ public:
   void set_flags(uintptr_t value);
   bool singlestep_flag() { return flags() & X86_TF_FLAG; }
   void clear_singlestep_flag() { set_flags(flags() & ~X86_TF_FLAG); }
-  void clear_resume_flag() { set_flags(flags() & ~X86_RF_FLAG); if ((signed long)u.x64regs.orig_rax < -1) u.x64regs.orig_rax = 0; }
+  void clear_resume_flag() { set_flags(flags() & ~X86_RF_FLAG); if(0) if ((signed long)u.x64regs.orig_rax < -1) u.x64regs.orig_rax = 0; }
   bool df_flag() const { return flags() & X86_DF_FLAG; }
 
   // End of X86-specific stuff
