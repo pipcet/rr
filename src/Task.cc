@@ -69,7 +69,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       desched_fd_child(-1),
       // This will be initialized when the syscall buffer is.
       cloned_file_data_fd_child(-1),
-      hpc(this,_tid, session.is_recording()),
+      lwp(this,_tid),
       tid(_tid),
       rec_tid(_rec_tid > 0 ? _rec_tid : _tid),
       syscallbuf_size(0),

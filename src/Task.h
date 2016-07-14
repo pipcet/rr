@@ -15,6 +15,7 @@
 #include "ExtraRegisters.h"
 #include "FdTable.h"
 #include "PerfCounters.h"
+#include "LWP.h"
 #include "PropertyTable.h"
 #include "Registers.h"
 #include "TaskishUid.h"
@@ -126,6 +127,7 @@ class Task {
   friend class RecordSession;
   friend class ReplaySession;
   friend class PerfCounters;
+  friend class LWP;
   friend class AddressSpace;
   friend class Registers;
 
@@ -685,7 +687,7 @@ public:
   /* The child's cloned_file_data_fd */
   int cloned_file_data_fd_child;
 
-  PerfCounters hpc;
+  LWP lwp;
 
   /* This is always the "real" tid of the tracee. */
   pid_t tid;
