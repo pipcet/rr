@@ -675,7 +675,7 @@ static void init_xsave() {
   }
 }
 
-ExtraRegisters& Task::extra_regs() {
+const ExtraRegisters& Task::extra_regs() {
   if (!extra_registers_known) {
     init_xsave();
     if (xsave_area_size) {
@@ -685,7 +685,7 @@ ExtraRegisters& Task::extra_regs() {
       extra_registers.data_.resize(xsave_area_size);
       struct iovec vec = { extra_registers.data_.data(),
                            extra_registers.data_.size() };
-      ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec);
+      xptrace(PTRACE_GETREGSET, NT_X86_XSTATE, &vec);
       ASSERT(this, vec.iov_len == xsave_area_size)
           << "Didn't get enough register data; expected " << xsave_area_size
           << " but got " << vec.iov_len;
@@ -829,11 +829,6 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   how_last_execution_resumed = how;
   set_debug_status(0);
 
-  if (how == RESUME_CONT) {
-    sync_lwp_state();
-    set_regs(registers);
-  }
-
   pid_t wait_ret = 0;
   if (session().is_recording()) {
     /* There's a nasty race where a stopped task gets woken up by a SIGKILL
@@ -872,101 +867,26 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   }
 }
 
-void Task::sync_lwp_state() {
-  registers.lwpretify2(this);
-  if ((extra_registers.getLWPU32(2) & 0x80000008) != 0x80000008) {
-    printf("warning: LWP flags %08x, should be 0x80000008\n",
-           extra_registers.getLWPU32(2));
-    extra_registers.setLWPU32(2, 0x80000008);
-  }
-  fallible_ptrace(PTRACE_POKEDATA, 0x70001000, reinterpret_cast<void *>(0x200000000000LL + extra_registers.getLWPU32(2)));
-  fallible_ptrace(PTRACE_POKEDATA, 0x70001010, 0);
-  fallible_ptrace(PTRACE_POKEDATA, 0x70001020, reinterpret_cast<void *>((long)LWP_FILTER<<32));
-  fallible_ptrace(PTRACE_POKEDATA, 0x70001090, reinterpret_cast<void *>(0x1ffffff + ((long)extra_registers.getLWPU32(18)<<32)));
-#if 0
-  int attempts = 0;
-  do {
-    extra_registers_changed = true;
-    extra_registers.data_.data()[840] |= 8;
-    extra_registers.data_.data()[843] |= 8;
-    if ((attempts&1) == 0) {
-      printf("single-stepping\n");
-      ptrace_if_alive(PTRACE_SINGLESTEP, nullptr, nullptr);
-      pid_t ret;
-      int raw_status = 0;
-      do {
-        ret = waitpid(tid, &raw_status, __WALL);
-      } while (ret != tid);
-      
-      set_extra_regs(extra_registers);
-    } else {
-      printf("spinning\n");
-      pid_t ret;
-      int raw_status = 0;
-      ptrace_if_alive(PTRACE_CONT, nullptr, nullptr);
-      usleep(50000);
-      ptrace_if_alive(PTRACE_INTERRUPT, nullptr, nullptr);
-      do {
-        ret = waitpid(tid, &raw_status, __WALL);
-      } while (ret != tid);
-      
-      set_extra_regs(extra_registers);
-    }
-    extra_registers_known = false;
-    if (attempts > 4)
-    if (extra_regs().data_.data()[840] & 8) {
-      printf("attempt %d succeeded\n", attempts);
-      break;
-    }
-    printf("attempt %d failed\n", attempts);
-  } while(attempts++ < 100);
-  registers.lwpop(this);
-#endif
-}
-  
 void Task::set_regs(const Registers& regs) {
   ASSERT(this, is_stopped);
   registers = regs;
-  //registers.retify(this);
-  registers.clear_resume_flag();
   auto ptrace_regs = registers.get_ptrace();
   ptrace_if_alive(PTRACE_SETREGS, nullptr, &ptrace_regs);
-  printf("standard regs: "); registers.print_register_file(stdout);
 }
 
 void Task::set_extra_regs(const ExtraRegisters& regs) {
-  if (!extra_registers_changed)
-    return;
-
   ASSERT(this, !regs.empty()) << "Trying to set empty ExtraRegisters";
-  ASSERT(this, regs.data_.size() == xsave_area_size);
+  extra_registers = regs;
+  extra_registers_known = true;
 
   init_xsave();
-  extra_registers = regs;
-
-  extra_registers_known = true;
-  extra_registers_changed = false;
 
   switch (extra_registers.format()) {
     case ExtraRegisters::XSAVE: {
       if (xsave_area_size) {
-        assert(extra_registers.data_.size() == xsave_area_size);
-        //memset(extra_registers.data_.data(), 0xff, 512);
-        //memset(extra_registers.data_.data() + 512 + 64, 0xff, 832 - 512 - 64);
-        extra_registers.data_.data()[512] = 7;
-        extra_registers.data_.data()[512+7] |= 0x40;
-        ExtraRegisters extra_registers2;
-        extra_registers2.data_.resize(xsave_area_size);
-        struct iovec vec = { extra_registers.data_.data(), regs.data_.size() };
-        struct iovec vec2 = { extra_registers2.data_.data(), extra_registers2.data_.size() };
-        ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
-        assert(extra_registers.data_.size() == xsave_area_size);
-        assert(extra_registers2.data_.size() == xsave_area_size);
+        struct iovec vec = { extra_registers.data_.data(),
+                             extra_registers.data_.size() };
         ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
-        assert(extra_registers.data_.size() == xsave_area_size);
-        ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
-        assert(extra_registers2.data_.size() == xsave_area_size);
-        set_regs(registers);
       } else {
 #if defined(__i386__)
         ptrace_if_alive(PTRACE_SETFPXREGS, nullptr,
