@@ -803,7 +803,7 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   // replay.
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
-    hpc.reset(tick_period == RESUME_UNLIMITED_TICKS
+    lwp.reset(tick_period == RESUME_UNLIMITED_TICKS
                   ? 0xffffff
                   : max<Ticks>(1, tick_period));
     // Ensure preload_globals.thread_locals_initialized is up to date. Avoid
@@ -1244,7 +1244,7 @@ void Task::wait(double interrupt_after_elapsed) {
     siginfo_t si;
     memset(&si, 0, sizeof(si));
     si.si_signo = PerfCounters::TIME_SLICE_SIGNAL;
-    si.si_fd = hpc.ticks_fd();
+    si.si_fd = lwp.ticks_fd();
     si.si_code = POLL_IN;
     did_waitpid(status, &si);
     return;
@@ -1325,10 +1325,10 @@ void Task::emulate_syscall_entry(const Registers& regs) {
 }
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
-  Ticks more_ticks = hpc.read_ticks();
+  Ticks more_ticks = lwp.read_ticks();
   // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
   // whatever they pick up something spurious later.
-  hpc.stop();
+  lwp.stop();
   LOG(debug) << "ticks = " << more_ticks << " + " << ticks;
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
