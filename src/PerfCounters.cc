@@ -20,9 +20,6 @@
 #include "kernel_metadata.h"
 #include "log.h"
 #include "util.h"
-#include "Task.h"
-
-#include "LWP.h"
 
 using namespace std;
 
@@ -50,8 +47,7 @@ enum CpuMicroarch {
   IntelIvyBridge,
   IntelHaswell,
   IntelBroadwell,
-  IntelSkylake,
-  AMDFamily15h,
+  IntelSkylake
 };
 
 struct PmuConfig {
@@ -61,22 +57,20 @@ struct PmuConfig {
   unsigned rinsn_cntr_event;
   unsigned hw_intr_cntr_event;
   bool supported;
-  bool uses_lwp;
 };
 
 // XXX please only edit this if you really know what you're doing.
 static const PmuConfig pmu_configs[] = {
-  { IntelSkylake, "Intel Skylake", 0x5101c4, 0x5100c0, 0x5301cb, true, false },
-  { IntelBroadwell, "Intel Broadwell", 0x5101c4, 0x5100c0, 0x5301cb, true, false },
-  { IntelHaswell, "Intel Haswell", 0x5101c4, 0x5100c0, 0x5301cb, true, false },
-  { IntelIvyBridge, "Intel Ivy Bridge", 0x5101c4, 0x5100c0, 0x5301cb, true, false },
+  { IntelSkylake, "Intel Skylake", 0x5101c4, 0x5100c0, 0x5301cb, true },
+  { IntelBroadwell, "Intel Broadwell", 0x5101c4, 0x5100c0, 0x5301cb, true },
+  { IntelHaswell, "Intel Haswell", 0x5101c4, 0x5100c0, 0x5301cb, true },
+  { IntelIvyBridge, "Intel Ivy Bridge", 0x5101c4, 0x5100c0, 0x5301cb, true },
   { IntelSandyBridge, "Intel Sandy Bridge", 0x5101c4, 0x5100c0, 0x5301cb,
-    true, false },
-  { IntelNehalem, "Intel Nehalem", 0x5101c4, 0x5100c0, 0x50011d, true, false },
-  { IntelWestmere, "Intel Westmere", 0x5101c4, 0x5100c0, 0x50011d, true, false },
-  { IntelPenryn, "Intel Penryn", 0, 0, 0, false, false },
-  { IntelMerom, "Intel Merom", 0, 0, 0, false, false },
-  { AMDFamily15h, "AMD family 15h", 0, 0, 0, true, true },
+    true },
+  { IntelNehalem, "Intel Nehalem", 0x5101c4, 0x5100c0, 0x50011d, true },
+  { IntelWestmere, "Intel Westmere", 0x5101c4, 0x5100c0, 0x50011d, true },
+  { IntelPenryn, "Intel Penryn", 0, 0, 0, false },
+  { IntelMerom, "Intel Merom", 0, 0, 0, false },
 };
 
 static string lowercase(const string& s) {
@@ -138,9 +132,6 @@ static CpuMicroarch get_cpu_microarch() {
     case 0x406e0:
     case 0x506e0:
       return IntelSkylake;
-    case 0xf20:
-    case 0x30f00:
-      return AMDFamily15h;
     default:
       FATAL() << "CPU " << HEX(cpu_type) << " unknown.";
       return UnknownCpu; // not reached
@@ -179,21 +170,7 @@ static void init_attributes() {
     FATAL() << "Microarchitecture `" << pmu->name << "' currently unsupported.";
   }
 
-  if (pmu->uses_lwp) {
-    FILE *f = fopen("/sys/devices/lwp/type", "r");
-    if (!f)
-      FATAL() << "LWP events not found";
-
-    int type;
-    if (fscanf(f, "%d", &type) != 1)
-      FATAL() << "LWP events not found";
-
-    fclose(f);
-
-    init_perf_event_attr(&ticks_attr, (perf_type_id)type, 0);
-  } else {
-    init_perf_event_attr(&ticks_attr, PERF_TYPE_RAW, pmu->rcb_cntr_event);
-  }
+  init_perf_event_attr(&ticks_attr, PERF_TYPE_RAW, pmu->rcb_cntr_event);
   init_perf_event_attr(&instructions_retired_attr, PERF_TYPE_RAW,
                        pmu->rinsn_cntr_event);
   init_perf_event_attr(&hw_interrupts_attr, PERF_TYPE_RAW,
@@ -210,10 +187,7 @@ const struct perf_event_attr& PerfCounters::ticks_attr() {
   return rr::ticks_attr;
 }
 
-PerfCounters::PerfCounters(Task* task, pid_t tid, bool add_offset) : task(task), tid(tid), started(false) {
-  last_ticks_period = 0;
-  saved_ticks = 0;
-  ticks_read = add_offset ? LWP_OFFSET : 0;
+PerfCounters::PerfCounters(pid_t tid) : tid(tid), started(false) {
   init_attributes();
 }
 
@@ -237,37 +211,13 @@ static ScopedFd start_counter(pid_t tid, int group_fd,
   return fd;
 }
 
-extern unsigned int xsave_area_size;
-  
 void PerfCounters::reset(Ticks ticks_period) {
   assert(ticks_period >= 0);
 
   stop();
 
-  ExtraRegisters& er = task->extra_regs();
-  assert(!er.empty());
-  assert(er.data().size() == xsave_area_size);
-
-  if (ticks_period > 0xffffff)
-    ticks_period = 0xffffff;
-
-  saved_ticks = read_ticks_nondestructively();
-  last_ticks_period = ticks_period;
-  if (er.getLWPU32(0) || er.getLWPU32(1)) {
-    er.setLWPU32(2, LWP_FLAGS);
-    er.setLWPU32(3, 0);
-    er.setLWPU32(7, LWP_FILTER);
-    er.setLWPU32(16 + LWP_EVENT, ticks_period);
-    task->extra_registers_changed = true;
-  } else {
-    last_ticks_period = 0;
-    saved_ticks = 0;
-  }
-  //printf("ticks_read %ld -> %ld\n", ticks_read, saved_ticks);
-  ticks_read = saved_ticks;
-
   struct perf_event_attr attr = rr::ticks_attr;
-  attr.sample_period = 1;
+  attr.sample_period = ticks_period;
   fd_ticks = start_counter(tid, -1, &attr);
 
   struct f_owner_ex own;
@@ -299,31 +249,10 @@ void PerfCounters::stop() {
   }
   started = false;
 
-  ExtraRegisters& er = task->extra_regs();
-  if (er.empty())
-    ASSERT(this->task, 0) << "ER empty";
-
   fd_ticks.close();
   fd_page_faults.close();
   fd_hw_interrupts.close();
   fd_instructions_retired.close();
-
-  saved_ticks = read_ticks_nondestructively();
-  last_ticks_period = 0;
-  er.setLWPU32(2, 0);
-  er.setLWPU32(3, 0);
-  er.setLWPU32(7, 0);
-  er.setLWPU32(16 + LWP_EVENT, 0);
-  task->extra_registers_changed = true;
-  //printf("stopped at %ld ticks\n", saved_ticks);
-}
-
-Ticks PerfCounters::read_ticks() {
-  long ticks = read_ticks_nondestructively();
-  long ret = ticks - ticks_read;
-  ticks_read = ticks;
-  //printf("ticks %ld\n", ticks_read);
-  return ret;
 }
 
 static int64_t read_counter(ScopedFd& fd) {
@@ -331,6 +260,10 @@ static int64_t read_counter(ScopedFd& fd) {
   ssize_t nread = read(fd, &val, sizeof(val));
   assert(nread == sizeof(val));
   return val;
+}
+
+Ticks PerfCounters::read_ticks() {
+  return started ? read_counter(fd_ticks) : 0;
 }
 
 PerfCounters::Extra PerfCounters::read_extra() {
