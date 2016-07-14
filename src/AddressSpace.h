@@ -34,6 +34,8 @@ class RecordTask;
 class Session;
 class Task;
 
+struct lwpcb;
+
 /**
  * Records information that the kernel knows about a mapping. This includes
  * everything returned through /proc/<pid>/maps but also information that
@@ -618,7 +620,7 @@ public:
     return rr_page_start() + rr_page_size();
   }
 
-  static remote_ptr<void> lwp_area_start() { return rr_page_end(); }
+  static remote_ptr<struct lwpcb> lwp_area_start() { return remote_ptr<struct lwpcb>(rr_page_end().as_int()); }
   static uint32_t lwp_area_size() { return 4096 + 8192; };
 
   enum Traced { TRACED, UNTRACED };
