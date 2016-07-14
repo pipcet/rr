@@ -962,14 +962,11 @@ void Task::set_extra_regs(const ExtraRegisters& regs) {
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
         assert(extra_registers.data_.size() == xsave_area_size);
         assert(extra_registers2.data_.size() == xsave_area_size);
-        printf("writing "); dump_er(extra_registers);
         ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec);
         assert(extra_registers.data_.size() == xsave_area_size);
         ptrace_if_alive(PTRACE_GETREGSET, NT_X86_XSTATE, &vec2);
         assert(extra_registers2.data_.size() == xsave_area_size);
-        printf("wrote "); dump_er(extra_registers2);
         set_regs(registers);
-        printf("debug status: "); printf("%lx\n", get_debug_reg(7));
       } else {
 #if defined(__i386__)
         ptrace_if_alive(PTRACE_SETFPXREGS, nullptr,

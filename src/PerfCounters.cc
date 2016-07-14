@@ -326,44 +326,6 @@ Ticks PerfCounters::read_ticks() {
   return ret;
 }
 
-Ticks PerfCounters::read_ticks_nondestructively() {
-  ExtraRegisters& er = task->extra_regs();
-  if (er.empty())
-    ASSERT(this->task, 0) << "ER empty";
-  if (er.empty())
-    abort();
-  if (er.getLWPU32(0) || er.getLWPU32(1)) {
-    if (er.getLWPU32(3) > 0x20) {
-      ASSERT(this->task, er.getLWPU32(3) <= 0x20) << "missed an interrupt";
-    }
-    if (er.getLWPU32(3) == 0x20 || (er.getLWPU32(8)&0xff)) {
-      if (er.getLWPU32(16+LWP_EVENT) & 0x1000000)
-        ;
-      else
-        ASSERT(this->task, 0) << "extra interrupt, counter " << er.getLWPU32(16+LWP_EVENT);
-    } else {
-      if (er.getLWPU32(16+LWP_EVENT) & 0x1000000)
-        ASSERT(this->task, 0) << "missed interrupt";
-    }
-    long counter_value = er.getLWPU32(16+LWP_EVENT);
-#if 0
-    long diff = (last_ticks_period - counter_value) & 0xffff;
-#else
-    //printf("[pre] cv %ld ltp %ld\n", counter_value, last_ticks_period);
-    counter_value |= (counter_value & 0x1000000) ? 0xffffffffff000000 : 0;
-    //printf("cv %ld ltp %ld\n", counter_value, last_ticks_period);
-    assert(counter_value >= -2048);
-    long diff = (last_ticks_period - counter_value);// & 0xffffff;
-    assert(diff >= 0);
-#endif
-    long ret = saved_ticks;
-    ret += diff;
-    return ret;
-  } else {
-    return saved_ticks;
-  }
-}
-
 static int64_t read_counter(ScopedFd& fd) {
   int64_t val;
   ssize_t nread = read(fd, &val, sizeof(val));
