@@ -138,6 +138,7 @@ static CpuMicroarch get_cpu_microarch() {
     case 0x406e0:
     case 0x506e0:
       return IntelSkylake;
+    case 0xf20:
     case 0x30f00:
       return AMDFamily15h;
     default:
