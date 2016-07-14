@@ -64,10 +64,11 @@ public:
 
   void set_arch(SupportedArch a) { arch_ = a; }
 
-  void retify(const Task *);
-  void lwpretify(const Task *);
-  void lwpretify2(const Task *);
-  void lwpop(const Task *);
+  /**
+   * Change the registers as though ip had been called by
+   * task. Actually, on x86-64, add an extra 128 bytes of reserved
+   * stack space for the red zone. */
+  bool fake_call(Task* task, uintptr_t ip);
 
   /**
    * Copy a user_regs_struct into these Registers. If the tracee architecture

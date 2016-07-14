@@ -231,48 +231,19 @@ void Registers::print_register_file_arch(FILE* f, const char* formats[]) const {
   fprintf(f, "\n");
 }
 
-void Registers::retify(const Task *task) {
-  if (u.x64regs.rip == 0x70000002)
-    return;
+bool Registers::fake_call(Task *task, uintptr_t ip)
+{
+  assert(this->ip() != ip);
 
-  if (!(u.x64regs.rip >= 0x400000 && u.x64regs.rip <= 0x500000))
-    return;
-
-  printf("changing %lx to 0x70000002, rsp %lx\n",
-         u.x64regs.rip, u.x64regs.rsp);
-  
-  u.x64regs.rsp -= 8;
-  const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(u.x64regs.rip));
-  u.x64regs.rip = 0x70000002;
-}
-
-void Registers::lwpretify(const Task *task) {
-  uintptr_t rip = u.x64regs.rip;
-  u.x64regs.rip = RR_PAGE_LWP;
+  /* 128 for the red zone, 8 for the return IP */
   u.x64regs.rsp -= 128 + 8;
-  printf("wrote rip %lx to rsp %lx\n", rip, u.x64regs.rsp);
-  
-  const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(rip));
-  lwpop(task);
-}
 
-void Registers::lwpretify2(const Task *task2) {
-  Task *task = const_cast<Task*>(task2);
-  uintptr_t rip = u.x64regs.rip;
-  if (task->is_in_rr_page() || !task->rr_page_mapped)
-    return;
-  u.x64regs.rip = RR_PAGE_LWP+3;
-  u.x64regs.rsp -= 128 + 8 /* 16 */;
-  
-  //  const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(0x33));
-  const_cast<Task*>(task)->ptrace_if_alive(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(rip));
-  printf("wrote rip %lx to rsp %lx\n", rip, u.x64regs.rsp);
-}
+  if (!task->fallible_ptrace(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(u.x64regs.rip)))
+    return false;
 
-void Registers::lwpop(const Task *task) {
-  u.x64regs.rip = const_cast<Task*>(task)->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
-  printf("read rip %lx from rsp %lx\n", u.x64regs.rip, u.x64regs.rsp);
-  u.x64regs.rsp += 128 + 8;
+  u.x64regs.rip = ip;
+
+  return true;
 }
 
 void Registers::print_register_file(FILE* f) const {
