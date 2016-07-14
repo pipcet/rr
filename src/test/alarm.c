@@ -28,13 +28,13 @@ int main(void) {
   for (counter = 0; counter >= 0 && !caught_sig; counter++) {
     unsigned long *out;
     asm volatile(".byte 0x8f, 0xe9, 0xf8, 0x12, 0xc8" : "=a" (out) : : "flags", "memory");
+    *(int *)0x70001000 = 0x80000008;
+    asm volatile(".byte 0x8f, 0xe9, 0x78, 0x12, 0xc0" : : "a" (0x70001000) : "flags", "memory");
     if (out && (out[0] & 8))
       (*okp)++;
     else {
-      *(int *)0x70001000 = 0x80000008;
       atomic_printf("{{{LWP state cleared, counter %d, okcounter %d}}}",
                     counter, *okp);
-      asm volatile(".byte 0x8f, 0xe9, 0x78, 0x12, 0xc0" : : "a" (0x70001000) : "flags", "memory");
     }
   }
 
