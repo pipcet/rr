@@ -826,6 +826,11 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   address_of_last_execution_resume = ip();
   if (extra_registers_changed)
     set_extra_regs(extra_registers);
+  if (rr_page_mapped && how == RESUME_CONT && ip() != RR_PAGE_LWP2) {
+    lwp.write_lwpcb(AddressSpace::lwp_area_start());
+    registers.fake_call(this, RR_PAGE_LWP2);
+    set_regs(registers);
+  }
   how_last_execution_resumed = how;
   set_debug_status(0);
 
@@ -1262,6 +1267,8 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
     }
   }
+  lwp.read_lwp_xsave();
+  lwp.lwp_xsave_to_lwpcb();
   if (status.stop_sig()) {
     if (override_siginfo) {
       pending_siginfo = *override_siginfo;
