@@ -716,55 +716,6 @@ ExtraRegisters& Task::extra_regs() {
   return extra_registers;
 }
 
-void Task::dump_er(ExtraRegisters& er)
-{
-  remote_ptr<unsigned long> ptr = er.dump();
-
-  if (ptr) {
-    unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
-    unsigned long w1 = fallible_ptrace(PTRACE_PEEKDATA, ptr+1, nullptr);
-    unsigned long w2 = fallible_ptrace(PTRACE_PEEKDATA, ptr+2, nullptr);
-    unsigned long w3 = fallible_ptrace(PTRACE_PEEKDATA, ptr+3, nullptr);
-
-    printf("event@%lx: %016lx %016lx %016lx %016lx\n",
-           ptr.as_int(), w0, w1, w2, w3);
-
-    if (ptr.as_int() == 0x70002000) {
-      fallible_ptrace(PTRACE_POKEDATA, ptr, nullptr);
-      fallible_ptrace(PTRACE_POKEDATA, ptr+1, nullptr);
-      fallible_ptrace(PTRACE_POKEDATA, ptr+2, nullptr);
-      fallible_ptrace(PTRACE_POKEDATA, ptr+3, nullptr);
-      printf("[cleared]\n");
-    }
-  }
-
-  //fallible_ptrace(PTRACE_POKEDATA, ptr + 2, (void *)0x00000020);
-
-  ptr = er.getLWPU32(0);
-  if (ptr) {
-    for (int i = 0; i < 8; i++) {
-      unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
-      unsigned long w1 = fallible_ptrace(PTRACE_PEEKDATA, ptr+1, nullptr);
-      unsigned long w2 = fallible_ptrace(PTRACE_PEEKDATA, ptr+2, nullptr);
-      unsigned long w3 = fallible_ptrace(PTRACE_PEEKDATA, ptr+3, nullptr);
-
-      printf("lwpcb@%lx: %016lx %016lx %016lx %016lx\n",
-             ptr.as_int(), w0, w1, w2, w3);
-
-      ptr += 32/8;
-    }
-  }
-  ptr = er.getLWPU32(0);
-
-  if (ptr) {
-    ptr += 8192/8;
-    unsigned long w0 = fallible_ptrace(PTRACE_PEEKDATA, ptr, nullptr);
-
-    printf("counter@%lx: %016lx\n",
-           ptr.as_int(), w0);
-  }
-}
-
 static ssize_t dr_user_word_offset(size_t i) {
   assert(i < NUM_X86_DEBUG_REGS);
   return offsetof(struct user, u_debugreg[0]) + sizeof(void*) * i;
