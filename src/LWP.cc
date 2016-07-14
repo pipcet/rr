@@ -96,7 +96,7 @@ bool LWP::read_lwp_xsave()
     return false;
   if (vec.iov_len != xsave_area_size)
     return false;
-  memcpy(&xsave, buf, sizeof xsave);
+  memcpy(&xsave, buf + xsave_lwp_off, sizeof xsave);
   free(buf);
 
   return true;
@@ -180,10 +180,11 @@ void LWP::reset(Ticks ticks_period)
   assert(ticks_period <= 0xffffff);
   assert(ticks_period <= LWP_INTERVAL);
 
-  start_ticks(tid, -1, &rr::ticks_attr);
+  fd_ticks = start_ticks(tid, -1, &rr::ticks_attr);
 
   xsave.event_counter[LWP_EVENT] = ticks_period;
   lwpcb.event[LWP_EVENT].counter = ticks_period;
+  last_ticks_period = ticks_period;
 }
 
 void LWP::stop()
