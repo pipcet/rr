@@ -822,7 +822,8 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   LOG(debug) << "resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string())
-             << " at ip " << ip();
+             << " at ip " << ip()
+             << " which" << ((is_in_traced_syscall() || is_in_untraced_syscall()) ? " is " : " is not ") << "in a syscall";
   address_of_last_execution_resume = ip();
   if (extra_registers_changed)
     set_extra_regs(extra_registers);
