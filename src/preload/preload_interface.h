@@ -44,7 +44,7 @@
 
 /* Must match generate_rr_page.py */
 #define RR_PAGE_ADDR 0x70000000
-#define RR_PAGE_SYSCALL_STUB_SIZE 3
+#define RR_PAGE_SYSCALL_STUB_SIZE 32
 #define RR_PAGE_SYSCALL_INSTRUCTION_END 2
 #define RR_PAGE_SYSCALL_ADDR(index)                                            \
   ((void*)(RR_PAGE_ADDR + RR_PAGE_SYSCALL_STUB_SIZE * (index)))
@@ -57,10 +57,10 @@
 #define RR_PAGE_SYSCALL_PRIVILEGED_UNTRACED_REPLAY_ONLY RR_PAGE_SYSCALL_ADDR(6)
 #define RR_PAGE_SYSCALL_PRIVILEGED_UNTRACED_RECORDING_ONLY                     \
   RR_PAGE_SYSCALL_ADDR(7)
-#define RR_PAGE_FF_BYTES (RR_PAGE_ADDR + RR_PAGE_SYSCALL_STUB_SIZE * 8)
-#define RR_PAGE_LWP (RR_PAGE_FF_BYTES + 8)
-#define RR_PAGE_LWP2 (RR_PAGE_LWP + 3)
-  
+
+#define RR_PAGE_LWP_THUNK (RR_PAGE_ADDR + RR_PAGE_SYSCALL_STUB_SIZE * 8)
+#define RR_PAGE_FF_BYTES (RR_PAGE_LWP_THUNK + 32)
+
 /* "Magic" (rr-implemented) syscalls that we use to initialize the
  * syscallbuf.
  *
