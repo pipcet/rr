@@ -837,6 +837,8 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   // replay.
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
+    /* XXX move this somewhere more sensible */
+    lwp.init_buffer(AddressSpace::lwp_buffer_start(), AddressSpace::lwp_buffer_size());
     lwp.reset(tick_period == RESUME_UNLIMITED_TICKS
                   ? 0xffffff
                   : max<Ticks>(1, tick_period));
@@ -856,7 +858,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   }
 
   if (!lwpcb_set && registers.sp() && !is_at_syscall_instruction(this, ip())) {
-    lwp.init_buffer(0x70002000, 0x2000);
 
     if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
       lwp.read_lwp_xsave(true);
