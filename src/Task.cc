@@ -550,6 +550,7 @@ void Task::on_syscall_exit(int syscallno, const Registers& regs) {
 void Task::move_ip_before_breakpoint() {
   // TODO: assert that this is at a breakpoint trap.
   Registers r = regs();
+  LOG(debug) << "mibb " << ip();
   r.set_ip(r.ip().decrement_by_bkpt_insn_length(arch()));
   set_regs(r);
 }
@@ -561,11 +562,14 @@ bool Task::set_lwpcb() {
   while (is_in_rr_page_thunk()) {
     resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
     if (is_ptrace_seccomp_event()) {
+      LOG(debug) << "aborting set_lwpcb: seccomp event";
       return false;
     }
     ASSERT(this, !ptrace_event()) << ptrace_event_name(ptrace_event());
-    if (!stop_sig())
+    if (!stop_sig()) {
+      LOG(debug) << "stopped with " << wait_status;
       continue;
+    }
     if (stop_sig() == SIGTRAP) {
       TrapReasons reasons = compute_trap_reasons();
 
@@ -578,8 +582,10 @@ bool Task::set_lwpcb() {
     if (ReplaySession::is_ignored_signal(stop_sig()) &&
         session().is_replaying())
       continue;
-    if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL)
+    if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
+      LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
       continue;
+    }
     ASSERT(this, session().is_recording());
     static_cast<RecordTask*>(this)->stash_sig();
     interrupted = true;
@@ -620,12 +626,14 @@ void Task::exit_syscall_and_prepare_restart() {
   // the tracee trapped at the syscall.
   r.set_original_syscallno(-1);
   r.set_syscallno(syscallno);
-/*   if (r.ip() == 0x70000101) {
+  if (r.ip() == 0x70000101 || is_in_rr_page_thunk()) {
+    LOG(debug) << "e_s_a_p_r @" << r.ip();
     r.set_sp(r.sp() + 8 + 128 + 16);
     r.set_ip(0x70000000);
-  } else { */
+  } else {
+    LOG(debug) << "!e_s_a_p_r @" << r.ip();
     r.set_ip(r.ip() - syscall_instruction_length(r.arch()));
-/*  } */
+  }
   set_regs(r);
 }
 
