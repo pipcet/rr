@@ -620,8 +620,23 @@ public:
     return rr_page_start() + rr_page_size();
   }
 
-  static remote_ptr<struct lwpcb> lwp_area_start() { return remote_ptr<struct lwpcb>(rr_page_end().as_int()); }
-  static uint32_t lwp_area_size() { return 4096 + 8192; };
+  static remote_ptr<struct lwpcb> lwpcb_start() {
+    return remote_ptr<struct lwpcb>(rr_page_end().as_int());
+  }
+
+  static uint32_t lwpcb_size() { return 4096; };
+
+  static remote_ptr<unsigned long> lwp_buffer_start() {
+    return remote_ptr<unsigned long>(lwpcb_start().as_int() + lwpcb_size());
+  }
+
+  static uint32_t lwp_buffer_size() { return 8192; };
+
+  static remote_ptr<void> lwp_area_start() {
+    return remote_ptr<void>(rr_page_end().as_int());
+  }
+
+  static uint32_t lwp_area_size() { return lwpcb_size() + lwp_buffer_size(); };
 
   enum Traced { TRACED, UNTRACED };
   enum Privileged { PRIVILEGED, UNPRIVILEGED };

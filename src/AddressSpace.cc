@@ -292,8 +292,8 @@ void AddressSpace::map_lwp_area(Task* t) {
     remote.infallible_mmap_syscall(lwp_area_start(), lwp_area_size(), prot, flags,
                                    -1, 0);
 
-    t->lwp.init_buffer(lwp_area_start() + 4096L, lwp_area_size() - 4096);
-    t->lwp.write_lwpcb(remote_ptr<lwpcb>(lwp_area_start().as_int()));
+    t->lwp.init_buffer(lwp_buffer_start(), lwp_buffer_size());
+    t->lwp.write_lwpcb(lwpcb_start());
   }
 
   map(lwp_area_start(), lwp_area_size(), prot, flags, 0, "", 0, 0);
