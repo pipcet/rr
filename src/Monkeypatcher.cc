@@ -332,6 +332,8 @@ bool Monkeypatcher::try_patch_syscall(RecordTask* t) {
   }
 
   Registers r = t->regs();
+  if (t->is_in_rr_page())
+    return false;
   if (tried_to_patch_syscall_addresses.count(r.ip())) {
     return false;
   }
