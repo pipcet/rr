@@ -828,6 +828,8 @@ TrapReasons Task::compute_trap_reasons() {
      * right.  The SI_KERNEL code is seen in the int3 test, so we
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
+    if (is_in_rr_page_thunk())
+      reasons.breakpoint = false;
     if (reasons.breakpoint) {
       ASSERT(this, as->is_breakpoint_instruction(this, ip_at_breakpoint))
           << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
