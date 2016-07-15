@@ -486,6 +486,8 @@ public:
    */
   WaitStatus status() const { return wait_status; }
 
+  SyscallState state() const { return syscall_state; }
+
   /**
    * Return the ptrace event as of the last call to |wait()/try_wait()|.
    */
