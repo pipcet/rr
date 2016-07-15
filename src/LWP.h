@@ -18,6 +18,7 @@
 #define LWP_FILTER 0x28000000L
 #define LWP_FILTERS 0x28000000L
 #define LWP_OFFSET 0
+#define LWP_MAX_PERIOD 0xffffffL
 #define LWP_INTERVAL 0x1ffffffL
 #define LWP_SIGN 0xffffffffff000000L
 
@@ -82,11 +83,11 @@ namespace rr {
 
     int ticks_fd() const { return fd_ticks.get(); }
 
-    void init_buffer(remote_ptr<void> buffer, size_t buffer_size);
+    bool init_buffer(remote_ptr<void> buffer, size_t buffer_size);
 
     bool write_lwpcb(remote_ptr<lwpcb> dest_lwp);
 
-    bool read_lwp_xsave();
+    bool read_lwp_xsave(bool disable_lwp);
 
     bool lwp_xsave_to_lwpcb();
 

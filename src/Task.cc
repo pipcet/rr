@@ -530,6 +530,26 @@ void Task::move_ip_before_breakpoint() {
   set_regs(r);
 }
 
+void Task::set_lwpcb() {
+  registers.fake_call(this, RR_PAGE_LWP_THUNK);
+  while (is_in_rr_page() && !is_in_rr_page_syscall()) {
+    resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
+    if (is_ptrace_seccomp_event()) {
+      continue;
+    }
+    ASSERT(this, !ptrace_event());
+    if (!stop_sig())
+      continue;
+    if (stop_sig() == SIGTRAP)
+      continue;
+    if (ReplaySession::is_ignored_signal(stop_sig()) &&
+        session().is_replaying())
+      continue;
+    ASSERT(this, session().is_recording());
+    static_cast<RecordTask*>(this)->stash_sig();
+  }
+}
+
 void Task::advance_syscall() {
   while (true) {
     resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS);
@@ -793,7 +813,8 @@ TrapReasons Task::compute_trap_reasons() {
 static const Property<bool, AddressSpace> thread_locals_initialized_property;
 
 void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
-                            TicksRequest tick_period, int sig) {
+                            TicksRequest tick_period, int sig,
+                            bool lwpcb_set) {
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
   // Always resetting here, and always to a nonzero number, improves
   // consistency between recording and replay and hopefully
@@ -819,6 +840,16 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
     }
   }
 
+  if (!lwpcb_set && registers.sp() && !is_at_syscall_instruction(this, ip())) {
+    lwp.init_buffer(0x70002000, 0x2000);
+
+    if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
+      lwp.read_lwp_xsave(true);
+      LOG(debug) << "starting LWP";
+      set_lwpcb();
+    }
+  }
+
   LOG(debug) << "resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string())
@@ -827,31 +858,7 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   address_of_last_execution_resume = ip();
   if (extra_registers_changed)
     set_extra_regs(extra_registers);
-  if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
-    if (how == RESUME_SINGLESTEP) {
-      /* nothing */
-    } else if (sig) {
-      /* nothing */
-    } else if (is_in_rr_page()) {
-      /* nothing */
-      LOG(debug) << "not starting LWP: RR page";
-    } else {
-      bool in_sigreturn = false;
-      in_sigreturn = is_sigreturn(registers.original_syscallno(), arch());
 
-      if (!in_sigreturn) {
-        lwp.init_buffer(0x70002000, 0x2000);
-        lwp.read_lwp_xsave();
-        LOG(debug) << "starting LWP";
-        registers.fake_call(this, RR_PAGE_LWP_THUNK);
-      } else {
-        LOG(debug) << "not starting LWP: sigreturn";
-      }
-    }
-  } else {
-    LOG(debug) << "not starting LWP: RR page not mapped";
-  }
-    
   registers.print_register_file(stderr);
   
   how_last_execution_resumed = how;
@@ -1276,7 +1283,7 @@ bool Task::rr_page_mapped()
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
   Ticks more_ticks = 0;
   if (rr_page_mapped()) {
-    if (lwp.read_lwp_xsave()) {
+    if (lwp.read_lwp_xsave(false)) {
       lwp.lwp_xsave_to_lwpcb();
       more_ticks = lwp.read_ticks();
     } else {

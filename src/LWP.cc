@@ -46,7 +46,7 @@ extern "C" {
 using namespace std;
 
 namespace rr {
-void LWP::init_buffer(remote_ptr<void> buffer, size_t buffer_size)
+bool LWP::init_buffer(remote_ptr<void> buffer, size_t buffer_size)
 {
   assert(buffer);
   assert(buffer_size >= 32 * 32);
@@ -66,6 +66,8 @@ void LWP::init_buffer(remote_ptr<void> buffer, size_t buffer_size)
   xsave.buffer_base = buffer.as_int();
   xsave.filters = LWP_FILTERS;
   xsave.buffer_head_offset = 0;
+
+  return true;
 }
 
 bool LWP::write_lwpcb(remote_ptr<struct lwpcb> dest_lwp)
@@ -88,7 +90,7 @@ unsigned LWP::xsave_area_size = 0;
 unsigned LWP::xsave_lwp_size = 0;
 unsigned LWP::xsave_lwp_off = 0;
 
-bool LWP::read_lwp_xsave()
+bool LWP::read_lwp_xsave(bool disable_lwp)
 {
   char *buf = (char *)malloc(xsave_area_size);
   bool ret;
@@ -101,9 +103,11 @@ bool LWP::read_lwp_xsave()
     return false;
   ret = (buf[519] & 0x40) != 0;
   memcpy(&xsave, buf + xsave_lwp_off, sizeof xsave);
-  buf[519] &= ~0x40;
-  if (!task->ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec))
-    return false;
+  if (disable_lwp) {
+    buf[519] &= ~0x40;
+    if (!task->ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec))
+      return false;
+  }
   free(buf);
 
   return ret;
@@ -211,10 +215,10 @@ static ScopedFd start_ticks(pid_t tid, int group_fd, struct perf_event_attr* att
 static struct perf_event_attr ticks_attr;
 void LWP::reset(Ticks ticks_period)
 {
-  if (ticks_period > 0xffffff)
-    ticks_period = 0xffffff;
+  if (ticks_period > LWP_MAX_PERIOD)
+    ticks_period = LWP_MAX_PERIOD;
   assert(ticks_period >= 0);
-  assert(ticks_period <= 0xffffff);
+  assert(ticks_period <= LWP_MAX_PERIOD);
   assert(ticks_period <= LWP_INTERVAL);
 
   struct perf_event_attr attr = rr::ticks_attr;

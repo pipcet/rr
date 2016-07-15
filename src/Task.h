@@ -328,6 +328,11 @@ public:
   void advance_syscall();
 
   /**
+   * Set the LWPCB, single-stepping through the RR page as necessary.
+   */
+  void set_lwpcb();
+
+  /**
    * Return the "task name"; i.e. what |prctl(PR_GET_NAME)| or
    * /proc/tid/comm would say that the task's name is.
    */
@@ -430,7 +435,8 @@ public:
    * and not this.
    */
   void resume_execution(ResumeRequest how, WaitRequest wait_how,
-                        TicksRequest tick_period, int sig = 0);
+                        TicksRequest tick_period, int sig = 0,
+                        bool lwpcb_set = false);
 
   /** Return the session this is part of. */
   Session& session() const { return *session_; }
