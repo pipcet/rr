@@ -1,6 +1,7 @@
 /* -*- Mode: C++; tab-width: 8; c-basic-offset: 2; indent-tabs-mode: nil; -*- */
 
-#define USE_BREAKPOINT_TARGET 1
+#define USE_BREAKPOINT_TARGET 0
+#define DEBUGTAG 1
 
 #include "ReplaySession.h"
 
