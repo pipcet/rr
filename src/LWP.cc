@@ -125,7 +125,7 @@ bool LWP::lwp_xsave_to_lwpcb()
      * Family 15h revision 00h-0fh: flag 0x80000000 cleared.
      */
     if (lwpcb.flags != xsave.flags) {
-      std::cerr << "LWP flags changed from " << lwpcb.flags << " to "
+      LOG(info) << "LWP flags changed from " << lwpcb.flags << " to "
                 << xsave.flags << "\n";
     }
     assert(lwpcb.buffer_size == xsave.buffer_size);
@@ -134,7 +134,7 @@ bool LWP::lwp_xsave_to_lwpcb()
      * Family 15h revision 30h-3fh: filters reset to 0x38000000 if flags = 0
      */
     if (lwpcb.filters != xsave.filters) {
-      std::cerr << "LWP filters changed from " << lwpcb.filters << " to "
+      LOG(info) << "LWP filters changed from " << lwpcb.filters << " to "
                 << xsave.filters << "\n";
     }
 
