@@ -851,6 +851,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   // replay.
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
+    uintptr_t syscallno = regs().original_syscallno();
     /* XXX move this somewhere more sensible */
     lwp.init_buffer(AddressSpace::lwp_buffer_start(), AddressSpace::lwp_buffer_size());
     lwp.reset(tick_period == RESUME_UNLIMITED_TICKS
@@ -875,12 +876,14 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         LOG(debug) << "starting LWP";
         if (!set_lwpcb()) {
           LOG(debug) << "couldn't";
+          registers.set_original_syscallno(syscallno);
           return true;
         }
 
         called_set_lwpcb = true;
       }
     }
+    registers.set_original_syscallno(syscallno);
   }
 
   LOG(debug) << "resuming execution of " << tid << " with "
