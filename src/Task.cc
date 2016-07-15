@@ -1584,8 +1584,9 @@ void Task::copy_state(const CapturedState& state) {
   {
     AutoRemoteSyscalls remote(this);
     {
-      char prname[16];
-      strncpy(prname, state.prname.c_str(), sizeof(prname));
+      char prname[17];
+      strncpy(prname, state.prname.c_str(), sizeof(prname)-1);
+      prname[sizeof(prname)-1] = 0;
       AutoRestoreMem remote_prname(remote, (const uint8_t*)prname,
                                    sizeof(prname));
       LOG(debug) << "    setting name to " << prname;
