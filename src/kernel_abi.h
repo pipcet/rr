@@ -1590,6 +1590,8 @@ struct X64Arch : public BaseArch<SupportedArch::x86_64, WordSize64Defs> {
  */
 bool is_at_syscall_instruction(Task* t, remote_code_ptr ptr);
 
+bool is_at_nop(Task* t, remote_code_ptr ptr);
+
 /**
  * Return the code bytes of an invoke-syscall instruction. The vector must
  * have the length given by |syscall_instruction_length|.

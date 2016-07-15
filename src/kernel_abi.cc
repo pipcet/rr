@@ -103,6 +103,15 @@ bool is_at_syscall_instruction(Task* t, remote_code_ptr ptr) {
   }
 }
 
+bool is_at_nop(Task* t, remote_code_ptr ptr) {
+  bool ok = true;
+  vector<uint8_t> code = t->read_mem(ptr.to_data_ptr<uint8_t>(), 1, &ok);
+  if (!ok) {
+    return false;
+  }
+  return code.data()[0] == 0x90;
+}
+
 vector<uint8_t> syscall_instruction(SupportedArch arch) {
   switch (arch) {
     case x86:
