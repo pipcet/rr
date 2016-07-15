@@ -177,20 +177,6 @@ static bool try_grow_map(RecordTask* t, siginfo_t* si) {
   return true;
 }
 
-/**
- * Return true if |t| was stopped because of a SIGSEGV resulting
- * from a rdtsc and |t| was updated appropriately, false otherwise.
- */
-static bool try_handle_lwp(RecordTask* t, siginfo_t* si) {
-  ASSERT(t, si->si_signo == SIGSEGV);
-
-  if (si->si_addr != (void*)0x70002000)
-    return false;
-
-  LOG(debug) << "  trapped for LWP";
-  return true;
-}
-
 void disarm_desched_event(RecordTask* t) {
   if (ioctl(t->desched_fd, PERF_EVENT_IOC_DISABLE, 0)) {
     FATAL() << "Failed to disarm desched event";
@@ -464,7 +450,7 @@ SignalHandled handle_signal(RecordTask* t, siginfo_t* si,
    * and fudge t appropriately. */
   switch (si->si_signo) {
     case SIGSEGV:
-      if (try_handle_rdtsc(t, si) || try_grow_map(t, si) || try_handle_lwp(t, si)) {
+      if (try_handle_rdtsc(t, si) || try_grow_map(t, si)) {
         // When SIGSEGV is blocked, apparently the kernel has to do
         // some ninjutsu to raise the trap.  We see the SIGSEGV
         // bit in the "SigBlk" mask in /proc/status cleared, and if
