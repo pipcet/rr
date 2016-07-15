@@ -336,7 +336,7 @@ public:
   /**
    * Set the LWPCB, single-stepping through the RR page as necessary.
    */
-  void set_lwpcb();
+  bool set_lwpcb();
 
   /**
    * Return the "task name"; i.e. what |prctl(PR_GET_NAME)| or
@@ -440,7 +440,7 @@ public:
    * You probably want to use one of the cont*() helpers above,
    * and not this.
    */
-  void resume_execution(ResumeRequest how, WaitRequest wait_how,
+  bool resume_execution(ResumeRequest how, WaitRequest wait_how,
                         TicksRequest tick_period, int sig = 0,
                         bool lwpcb_set = false);
 
@@ -554,7 +554,7 @@ public:
    * with the process in a stopped() state. If interrupt_after_elapsed > 0,
    * interrupt the task after that many seconds have elapsed.
    */
-  void wait(double interrupt_after_elapsed = 0);
+  void wait(double interrupt_after_elapsed = 0, bool keep_lwpcb = false);
   /**
    * Return true if the status of this has changed, but don't
    * block.

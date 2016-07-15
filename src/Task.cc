@@ -823,9 +823,11 @@ TrapReasons Task::compute_trap_reasons() {
   return reasons;
 }
 
+static bool is_in_non_sigreturn_exit_syscall(Task* t);
+
 static const Property<bool, AddressSpace> thread_locals_initialized_property;
 
-void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
+bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
                             TicksRequest tick_period, int sig,
                             bool lwpcb_set) {
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
