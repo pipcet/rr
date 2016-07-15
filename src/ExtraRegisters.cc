@@ -315,21 +315,4 @@ void ExtraRegisters::set_user_fpxregs_struct(
   memcpy(data_.data(), &regs, sizeof(regs));
 }
 
-unsigned ExtraRegisters::getLWPU32(size_t index)
-{
-  unsigned ret;
-  assert(data_.size() == 960);
-
-  memcpy(&ret, data_.data() + 832 + index * 4, 4);
-
-  return ret;
-}
-
-void ExtraRegisters::setLWPU32(size_t index, unsigned value)
-{
-  assert(data_.size() == 960);
-  memcpy(data_.data() + 832 + index * 4, &value, 4);
-  //printf("changed "); dump();
-}
-
 } // namespace rr

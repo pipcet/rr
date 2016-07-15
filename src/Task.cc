@@ -83,7 +83,6 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       detected_unexpected_exit(false),
       extra_registers(a),
       extra_registers_known(false),
-      extra_registers_changed(false),
       session_(&session),
       top_of_stack(),
       seen_ptrace_exit_event(false) {}
@@ -663,10 +662,7 @@ const Registers& Task::regs() const {
 }
 
 // 0 means XSAVE not detected
-unsigned int xsave_area_size = 0;
-static unsigned long xsave_features;
-static unsigned int xsave_lwp_size;
-static unsigned int xsave_lwp_off;
+static unsigned int xsave_area_size = 0;
 static bool xsave_initialized = false;
 
 static void init_xsave() {
@@ -685,13 +681,6 @@ static void init_xsave() {
   // even when it might not be needed. Simpler that way.
   cpuid_data = cpuid(CPUID_GETXSAVE, 0);
   xsave_area_size = cpuid_data.ecx;
-  xsave_features = ((long)cpuid_data.edx << 32LL) + cpuid_data.eax;
-
-  if (xsave_features & (1LL<<62)) {
-    cpuid_data = cpuid(CPUID_GETXSAVE, 62);
-    xsave_lwp_size = cpuid_data.eax;
-    xsave_lwp_off = cpuid_data.ebx;
-  }
 }
 
 const ExtraRegisters& Task::extra_regs() {
@@ -729,7 +718,6 @@ const ExtraRegisters& Task::extra_regs() {
     }
 
     extra_registers_known = true;
-    extra_registers_changed = false;
   }
   return extra_registers;
 }
@@ -856,11 +844,6 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << " at ip " << ip()
              << " which" << ((is_in_traced_syscall() || is_in_untraced_syscall()) ? " is " : " is not ") << "in a syscall";
   address_of_last_execution_resume = ip();
-  if (extra_registers_changed)
-    set_extra_regs(extra_registers);
-
-  registers.print_register_file(stderr);
-  
   how_last_execution_resumed = how;
   set_debug_status(0);
 
@@ -907,7 +890,6 @@ void Task::set_regs(const Registers& regs) {
   registers = regs;
   auto ptrace_regs = registers.get_ptrace();
   ptrace_if_alive(PTRACE_SETREGS, nullptr, &ptrace_regs);
-  registers.print_register_file(stderr);
 }
 
 void Task::set_extra_regs(const ExtraRegisters& regs) {
@@ -1306,7 +1288,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
     struct user_regs_struct ptrace_regs;
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
       registers.set_from_ptrace(ptrace_regs);
-      registers.print_register_file(stderr);
       did_read_regs = true;
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
@@ -1330,7 +1311,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
     seen_ptrace_exit_event = true;
   }
 
-  bool need_to_set_regs = true;
+  bool need_to_set_regs = false;
   if (registers.singlestep_flag()) {
     registers.clear_singlestep_flag();
     need_to_set_regs = true;

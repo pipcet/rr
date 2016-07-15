@@ -420,8 +420,6 @@ void RecordSession::task_continue(const StepState& step_state) {
     } else {
       ticks_request = (TicksRequest)max<Ticks>(
           0, scheduler().current_timeslice_end() - t->tick_count());
-      if (ticks_request > 0xffffff)
-        ticks_request = (TicksRequest)0xffffff;
     }
     bool singlestep =
         t->emulated_ptrace_cont_command == PTRACE_SINGLESTEP ||
@@ -912,9 +910,9 @@ static void preinject_signal(RecordTask* t) {
      * don't want it delivered to the task for real.
      */
     while (true) {
-      //auto old_ip = t->ip();
+      auto old_ip = t->ip();
       t->resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS);
-      //ASSERT(t, old_ip == t->ip());
+      ASSERT(t, old_ip == t->ip());
       if (t->status().group_stop()) {
         /* Sending SIGCONT (4.4.3-300.fc23.x86_64) triggers this. Unclear why
          * it would... */
@@ -980,7 +978,7 @@ static bool inject_handled_signal(RecordTask* t) {
 
   // We stepped into a user signal handler.
   ASSERT(t, t->stop_sig() == SIGTRAP);
-  //ASSERT(t, t->get_signal_user_handler(sig) == t->ip());
+  ASSERT(t, t->get_signal_user_handler(sig) == t->ip());
 
   if (t->signal_handler_takes_siginfo(sig)) {
     // The kernel copied siginfo into userspace so it can pass a pointer to

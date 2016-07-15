@@ -94,7 +94,7 @@ enum TicksRequest {
   // bugs on some systems that report performance counter advances while
   // in the kernel...
   RESUME_NO_TICKS = -2,
-  RESUME_UNLIMITED_TICKS = 0xffffff,
+  RESUME_UNLIMITED_TICKS = -1
   // Positive values are a request for an interrupt
   // after that number of ticks
 };
