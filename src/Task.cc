@@ -855,14 +855,17 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         *prop = thread_locals_initialized;
       }
     }
-  }
+    if (!lwpcb_set) {
+      if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
+        lwp.read_lwp_xsave(true);
+        LOG(debug) << "starting LWP";
+        if (!set_lwpcb()) {
+          LOG(debug) << "couldn't";
+          return true;
+        }
 
-  if (!lwpcb_set && registers.sp() && !is_at_syscall_instruction(this, ip())) {
-
-    if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
-      lwp.read_lwp_xsave(true);
-      LOG(debug) << "starting LWP";
-      set_lwpcb();
+        called_set_lwpcb = true;
+      }
     }
   }
 
