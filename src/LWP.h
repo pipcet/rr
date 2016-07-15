@@ -15,11 +15,11 @@
  */
 #define LWP_FLAGS 0x80000008L
 #define LWP_EVENT          2L
-#define LWP_FILTER 0x00000000L
-#define LWP_FILTERS 0x00000000L
+#define LWP_FILTER 0x28000000L
+#define LWP_FILTERS 0x28000000L
 #define LWP_OFFSET 0
 #define LWP_INTERVAL 0x1ffffffL
-#define LWP_SIGN 0xfffffffff1000000L
+#define LWP_SIGN 0xffffffffff000000L
 
 struct perf_event_attr;
 
@@ -41,7 +41,13 @@ namespace rr {
     uint64_t rsvd56;
     uint32_t buffer_tail_offset;
     uint32_t rsvd68;
-    uint64_t rsvd70;
+    uint64_t rsvd72;
+    uint64_t rsvd80;
+    uint64_t rsvd88;
+    uint64_t rsvd96;
+    uint64_t rsvd104;
+    uint64_t rsvd112;
+    uint64_t rsvd120;
     struct {
       uint32_t interval;
       uint32_t counter;

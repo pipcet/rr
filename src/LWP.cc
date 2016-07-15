@@ -58,12 +58,14 @@ void LWP::init_buffer(remote_ptr<void> buffer, size_t buffer_size)
   lwpcb.buffer_base = buffer.as_int();
   lwpcb.filters = LWP_FILTERS;
   lwpcb.event[LWP_EVENT].interval = LWP_INTERVAL;
+  lwpcb.buffer_head_offset = lwpcb.buffer_tail_offset = 0;
 
   memset(&xsave, 0, sizeof xsave);
   xsave.flags = LWP_FLAGS;
   xsave.buffer_size = buffer_size;
   xsave.buffer_base = buffer.as_int();
   xsave.filters = LWP_FILTERS;
+  xsave.buffer_head_offset = 0;
 }
 
 bool LWP::write_lwpcb(remote_ptr<struct lwpcb> dest_lwp)
@@ -75,7 +77,7 @@ bool LWP::write_lwpcb(remote_ptr<struct lwpcb> dest_lwp)
 
   unsigned int i;
   for (i = 0; i < (sizeof(lwpcb) + 7) / 8; i++) {
-    if (!task->ptrace_if_alive(PTRACE_POKEDATA, dest + i, &src[i]))
+    if (!task->ptrace_if_alive(PTRACE_POKEDATA, dest + i, reinterpret_cast<void*>(src[i])))
       return false;
   }
 
@@ -97,6 +99,9 @@ bool LWP::read_lwp_xsave()
   if (vec.iov_len != xsave_area_size)
     return false;
   memcpy(&xsave, buf + xsave_lwp_off, sizeof xsave);
+  buf[519] &= ~0x40;
+  if (!task->ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec))
+    return false;
   free(buf);
 
   return true;
@@ -105,16 +110,42 @@ bool LWP::read_lwp_xsave()
 bool LWP::lwp_xsave_to_lwpcb()
 {
   if (xsave.flags) {
+    /* Flags should be unchanged.
+     *
+     * Family 15h revision 00h-0fh: flag 0x80000000 cleared.
+     */
+    if (lwpcb.flags != xsave.flags) {
+      std::cerr << "LWP flags changed from " << lwpcb.flags << " to "
+                << xsave.flags << "\n";
+    }
+    assert(lwpcb.buffer_size == xsave.buffer_size);
+    assert(lwpcb.buffer_base == xsave.buffer_base);
+    /* Family 15h revision 00h-0fh: filters reset to 0x38000000 if flags = 0
+     * Family 15h revision 30h-3fh: filters reset to 0x38000000 if flags = 0
+     */
+    if (lwpcb.filters != xsave.filters) {
+      std::cerr << "LWP filters changed from " << lwpcb.filters << " to "
+                << xsave.filters << "\n";
+    }
+
     lwpcb.flags = xsave.flags;
     lwpcb.buffer_size = xsave.buffer_size;
     lwpcb.buffer_base = xsave.buffer_base;
+    if (lwpcb.buffer_head_offset != xsave.buffer_head_offset) {
+      LOG(debug) << "LWP buffer head offset changed from " << lwpcb.buffer_head_offset << " to " << xsave.buffer_head_offset;
+    }
     lwpcb.buffer_head_offset = xsave.buffer_head_offset;
     lwpcb.filters = xsave.filters;
+    if (lwpcb.event[LWP_EVENT].counter != xsave.event_counter[LWP_EVENT]) {
+      LOG(debug) << "LWP counter changed from " << lwpcb.event[LWP_EVENT].counter << " to " << xsave.event_counter[LWP_EVENT];
+    }
     lwpcb.event[LWP_EVENT].counter = xsave.event_counter[LWP_EVENT];
   }
 
   return true;
 }
+
+static void init_attributes();
 
 LWP::LWP(Task *task, pid_t tid)
   : task(task), tid(tid), fd_ticks(-1), started(false),
@@ -145,6 +176,8 @@ LWP::LWP(Task *task, pid_t tid)
       abort();
     }
   }
+
+  init_attributes();
 }
 
 LWP::~LWP()
@@ -180,18 +213,36 @@ void LWP::reset(Ticks ticks_period)
   assert(ticks_period <= 0xffffff);
   assert(ticks_period <= LWP_INTERVAL);
 
-  fd_ticks = start_ticks(tid, -1, &rr::ticks_attr);
+  struct perf_event_attr attr = rr::ticks_attr;
+  fd_ticks = start_ticks(tid, -1, &attr);
+
+  struct f_owner_ex own;
+  own.type = F_OWNER_TID;
+  own.pid = tid;
+  if (fcntl(fd_ticks, F_SETOWN_EX, &own)) {
+    FATAL() << "Failed to SETOWN_EX ticks event fd";
+  }
+  if (fcntl(fd_ticks, F_SETFL, O_ASYNC) ||
+      fcntl(fd_ticks, F_SETSIG, PerfCounters::TIME_SLICE_SIGNAL)) {
+    FATAL() << "Failed to make ticks counter ASYNC with sig"
+            << signal_name(PerfCounters::TIME_SLICE_SIGNAL);
+  }
 
   xsave.event_counter[LWP_EVENT] = ticks_period;
   lwpcb.event[LWP_EVENT].counter = ticks_period;
   last_ticks_period = ticks_period;
+
+  lwpcb.buffer_head_offset = lwpcb.buffer_tail_offset = 0;
+  xsave.buffer_head_offset = 0;
+
+  LOG(debug) << "fd open: " << ticks_period;
 }
 
 void LWP::stop()
 {
-  lwpcb.flags = 0;
-  xsave.flags = 0;
-
+  read_ticks();
+  saved_ticks = ticks_read;
+  LOG(debug) << "fd closed";
   fd_ticks.close();
 }
 
