@@ -620,6 +620,10 @@ public:
     return rr_page_start() + rr_page_size();
   }
 
+  static remote_ptr<void> rr_page_syscall_end() {
+    return RR_PAGE_LWP_THUNK;
+  }
+
   static remote_ptr<struct lwpcb> lwpcb_start() {
     return remote_ptr<struct lwpcb>(rr_page_end().as_int());
   }
