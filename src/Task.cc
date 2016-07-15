@@ -126,6 +126,29 @@ Task::~Task() {
   LOG(debug) << "  dead";
 }
 
+void Task::update_syscall_state(SyscallState old_state)
+{
+  if (old_state == ENTERING_SYSCALL_PTRACE &&
+      how_last_execution_resumed == RESUME_SYSCALL) {
+    if (wait_status.is_syscall() ||
+        wait_status.ptrace_event() ||
+        wait_status.fatal_sig())
+      syscall_state = EXITING_SYSCALL;
+    else
+      abort();
+  } else {
+    if (wait_status.is_syscall())
+      syscall_state = ENTERING_SYSCALL_PTRACE;
+    else
+      syscall_state = NO_SYSCALL;
+  }
+}
+
+void Task::update_syscall_state()
+{
+  update_syscall_state(syscall_state);
+}
+
 void Task::finish_emulated_syscall() {
   // We need to execute something to get us out of a SYSEMU syscall-stop into a
   // signal-stop. SINGLESTEP/SYSEMU_SINGLESTEP works, but sometimes executes
@@ -171,12 +194,14 @@ void Task::finish_emulated_syscall() {
   }
   set_regs(r);
   wait_status = WaitStatus();
+  update_syscall_state();
 }
 
 void Task::dump(FILE* out) const {
   out = out ? out : stderr;
   stringstream ss;
   ss << wait_status;
+  ss << syscall_state;
   fprintf(out, "  %s(tid:%d rec_tid:%d status:0x%s%s)<%p>\n", prname.c_str(),
           tid, rec_tid, ss.str().c_str(), unstable ? " UNSTABLE" : "", this);
   if (session().is_recording()) {
@@ -1262,10 +1287,17 @@ bool Task::rr_page_mapped()
   return (fallible_ptrace(PTRACE_PEEKDATA, remote_ptr<void>(0x70001000), nullptr) != -1);
 }
 
-void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
+void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep_lwpcb) {
+  did_waitpid(status, override_siginfo, keep_lwpcb, syscall_state);
+}
+
+void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep_lwpcb, SyscallState old_state) {
+  wait_status = status;
+  update_syscall_state(old_state);
+
   Ticks more_ticks = 0;
-  if (rr_page_mapped()) {
-    if (lwp.read_lwp_xsave(false)) {
+  if (rr_page_mapped() && !keep_lwpcb) {
+    if (lwp.read_lwp_xsave(syscall_state != ENTERING_SYSCALL_PTRACE)) {
       lwp.lwp_xsave_to_lwpcb();
       more_ticks = lwp.read_ticks();
     } else {
@@ -1590,6 +1622,7 @@ Task::CapturedState Task::capture_state() {
   state.scratch_ptr = scratch_ptr;
   state.scratch_size = scratch_size;
   state.wait_status = wait_status;
+  state.syscall_state = syscall_state;
   state.ticks = ticks;
   state.top_of_stack = top_of_stack;
   state.thread_locals_initialized = thread_locals_initialized;
@@ -1642,6 +1675,7 @@ void Task::copy_state(const CapturedState& state) {
   // Whatever |from|'s last wait status was is what ours would
   // have been.
   wait_status = state.wait_status;
+  syscall_state = state.syscall_state;
 
   ticks = state.ticks;
 

@@ -202,7 +202,13 @@ public:
    * If override_siginfo is non-null and status indicates a pending signal,
    * use *override_siginfo as the siginfo instead of reading it from the kernel.
    */
-  void did_waitpid(WaitStatus status, siginfo_t* override_siginfo = nullptr);
+  void did_waitpid(WaitStatus status, siginfo_t* override_siginfo = nullptr,
+                   bool keep_lwpcb = false);
+  void did_waitpid(WaitStatus status, siginfo_t* override_siginfo,
+                   bool keep_lwpcb, SyscallState old_state);
+
+  void update_syscall_state(SyscallState old_state);
+  void update_syscall_state();
 
   /**
    * Syscalls have side effects on registers (e.g. setting the flags register).
@@ -743,6 +749,7 @@ public:
     int desched_fd_child;
     int cloned_file_data_fd_child;
     WaitStatus wait_status;
+    SyscallState syscall_state;
     bool thread_locals_initialized;
   };
 
@@ -936,6 +943,7 @@ protected:
   // The most recent status of this task as returned by
   // waitpid().
   WaitStatus wait_status;
+  SyscallState syscall_state;
   // The most recent siginfo (captured when wait_status shows pending_sig())
   siginfo_t pending_siginfo;
   // True when a PTRACE_EXIT_EVENT has been observed in the wait_status
