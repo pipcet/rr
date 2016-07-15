@@ -52,20 +52,24 @@ bool LWP::init_buffer(remote_ptr<void> buffer, size_t buffer_size)
   assert(buffer_size >= 32 * 32);
   assert(buffer_size % 32 == 0);
 
-  memset(&lwpcb, 0, sizeof lwpcb);
-  lwpcb.flags = LWP_FLAGS;
-  lwpcb.buffer_size = buffer_size;
-  lwpcb.buffer_base = buffer.as_int();
-  lwpcb.filters = LWP_FILTERS;
-  lwpcb.event[LWP_EVENT].interval = LWP_INTERVAL;
-  lwpcb.buffer_head_offset = lwpcb.buffer_tail_offset = 0;
+  if (lwpcb.buffer_base == 0) {
+    memset(&lwpcb, 0, sizeof lwpcb);
+    lwpcb.flags = LWP_FLAGS;
+    lwpcb.buffer_size = buffer_size;
+    lwpcb.buffer_base = buffer.as_int();
+    lwpcb.filters = LWP_FILTERS;
+    lwpcb.event[LWP_EVENT].interval = LWP_INTERVAL;
+    lwpcb.buffer_head_offset = lwpcb.buffer_tail_offset = 0;
 
-  memset(&xsave, 0, sizeof xsave);
-  xsave.flags = LWP_FLAGS;
-  xsave.buffer_size = buffer_size;
-  xsave.buffer_base = buffer.as_int();
-  xsave.filters = LWP_FILTERS;
-  xsave.buffer_head_offset = 0;
+    memset(&xsave, 0, sizeof xsave);
+    xsave.flags = LWP_FLAGS;
+    xsave.buffer_size = buffer_size;
+    xsave.buffer_base = buffer.as_int();
+    xsave.filters = LWP_FILTERS;
+    xsave.buffer_head_offset = 0;
+
+    return true;
+  }
 
   return true;
 }
@@ -184,6 +188,7 @@ LWP::LWP(Task *task, pid_t tid)
   }
 
   init_attributes();
+  lwpcb.buffer_base = 0;
 }
 
 LWP::~LWP()
