@@ -827,11 +827,29 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   address_of_last_execution_resume = ip();
   if (extra_registers_changed)
     set_extra_regs(extra_registers);
-  if (rr_page_mapped)
-    lwp.write_lwpcb(AddressSpace::lwpcb_start());
-  if (rr_page_mapped && how == RESUME_CONT && ip() != RR_PAGE_LWP2) {
-    registers.fake_call(this, RR_PAGE_LWP2);
-    set_regs(registers);
+  if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
+    if (how == RESUME_SINGLESTEP) {
+      /* nothing */
+    } else if (sig) {
+      /* nothing */
+    } else if (is_in_rr_page()) {
+      /* nothing */
+      LOG(debug) << "not starting LWP: RR page";
+    } else {
+      bool in_sigreturn = false;
+      in_sigreturn = is_sigreturn(registers.original_syscallno(), arch());
+
+      if (!in_sigreturn) {
+        lwp.init_buffer(0x70002000, 0x2000);
+        lwp.read_lwp_xsave();
+        LOG(debug) << "starting LWP";
+        registers.fake_call(this, RR_PAGE_LWP_THUNK);
+      } else {
+        LOG(debug) << "not starting LWP: sigreturn";
+      }
+    }
+  } else {
+    LOG(debug) << "not starting LWP: RR page not mapped";
   }
     
   registers.print_register_file(stderr);
@@ -1256,15 +1274,22 @@ bool Task::rr_page_mapped()
 }
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
-  lwp.read_lwp_xsave();
-  lwp.lwp_xsave_to_lwpcb();
-  Ticks more_ticks = lwp.read_ticks();
-  // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
-  // whatever they pick up something spurious later.
+  Ticks more_ticks = 0;
+  if (rr_page_mapped()) {
+    if (lwp.read_lwp_xsave()) {
+      lwp.lwp_xsave_to_lwpcb();
+      more_ticks = lwp.read_ticks();
+    } else {
+      LOG(debug) << "LWP disabled";
+    }
+    // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
+    // whatever they pick up something spurious later.
+    lwp.stop();
+    ticks += more_ticks;
+    session().accumulate_ticks_processed(more_ticks);
+  }
   lwp.stop();
-  ticks += more_ticks;
-  session().accumulate_ticks_processed(more_ticks);
-
+  LOG(debug) << "  ticks = " << (ticks - more_ticks) << " + " << more_ticks;
   LOG(debug) << "  (refreshing register cache)";
   intptr_t original_syscallno = registers.original_syscallno();
   // Skip reading registers in a PTRACE_EVENT_EXEC, since
