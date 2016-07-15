@@ -577,6 +577,7 @@ void Task::post_exec(SupportedArch a, const string& exe_file) {
    * that the address space layout for the replay tasks will
    * (should!) be the same as for the recorded tasks.  So we can
    * start validating registers at events. */
+  rr_page_mapped = false;
   session().post_exec();
 
   as->erase_task(this);
@@ -822,12 +823,14 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
 
   LOG(debug) << "resuming execution of " << tid << " with "
              << ptrace_req_name(how)
-             << (sig ? string(", signal ") + signal_name(sig) : string());
+             << (sig ? string(", signal ") + signal_name(sig) : string())
+             << " at ip " << ip();
   address_of_last_execution_resume = ip();
   if (extra_registers_changed)
     set_extra_regs(extra_registers);
+  if (rr_page_mapped)
+    lwp.write_lwpcb(AddressSpace::lwpcb_start());
   if (rr_page_mapped && how == RESUME_CONT && ip() != RR_PAGE_LWP2) {
-    lwp.write_lwpcb(AddressSpace::lwp_area_start());
     registers.fake_call(this, RR_PAGE_LWP2);
     set_regs(registers);
   }
@@ -877,6 +880,7 @@ void Task::set_regs(const Registers& regs) {
   registers = regs;
   auto ptrace_regs = registers.get_ptrace();
   ptrace_if_alive(PTRACE_SETREGS, nullptr, &ptrace_regs);
+  registers.print_register_file(stderr);
 }
 
 void Task::set_extra_regs(const ExtraRegisters& regs) {
@@ -1245,6 +1249,8 @@ void Task::emulate_syscall_entry(const Registers& regs) {
 }
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
+  lwp.read_lwp_xsave();
+  lwp.lwp_xsave_to_lwpcb();
   Ticks more_ticks = lwp.read_ticks();
   // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
   // whatever they pick up something spurious later.
@@ -1267,8 +1273,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
     }
   }
-  lwp.read_lwp_xsave();
-  lwp.lwp_xsave_to_lwpcb();
   if (status.stop_sig()) {
     if (override_siginfo) {
       pending_siginfo = *override_siginfo;
