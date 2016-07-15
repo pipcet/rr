@@ -245,6 +245,8 @@ bool Registers::fake_call(Task *task, uintptr_t ip)
 
   u.x64regs.rip = ip;
 
+  task->set_regs(*this);
+
   return true;
 }
 
