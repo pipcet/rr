@@ -846,6 +846,16 @@ static const Property<bool, AddressSpace> thread_locals_initialized_property;
 bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
                             TicksRequest tick_period, int sig,
                             bool lwpcb_set) {
+  remote_code_ptr address_of_last_execution_resume2 = address_of_last_execution_resume;
+  bool __attribute__((unused)) called_set_lwpcb = false;
+
+  LOG(debug) << "(I) resuming execution of " << tid << " with "
+             << ptrace_req_name(how)
+             << (sig ? string(", signal ") + signal_name(sig) : string())
+             << " at ip " << ip()
+             << " (previously " << address_of_last_execution_resume2 << ")"
+             << " ticks " << tick_period;
+
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
   // Always resetting here, and always to a nonzero number, improves
   // consistency between recording and replay and hopefully

@@ -1078,7 +1078,7 @@ void RecordSession::signal_state_changed(RecordTask* t, StepState* step_state) {
         last_task_switchable = ALLOW_SWITCH;
       } else {
         LOG(debug) << "  " << t->tid << ": no user handler for "
-                   << signal_name(sig);
+                   << signal_name(sig) << ": " << t->is_sig_blocked(sig);
         // Don't do another task continue. We want to deliver the signal
         // as the next thing that the task does.
         step_state->continue_type = DONT_CONTINUE;
