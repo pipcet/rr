@@ -590,7 +590,7 @@ bool Task::set_lwpcb() {
 
 void Task::advance_syscall() {
   while (true) {
-    resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS);
+    resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
     if (is_ptrace_seccomp_event()) {
       continue;
     }
@@ -929,8 +929,10 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   is_stopped = false;
   extra_registers_known = false;
   if (RESUME_WAIT == wait_how) {
-    wait();
+    wait(0, lwpcb_set);
   }
+
+  return false;
 }
 
 void Task::set_regs(const Registers& regs) {
@@ -1136,7 +1138,7 @@ static struct timeval to_timeval(double t) {
   return v;
 }
 
-void Task::wait(double interrupt_after_elapsed) {
+void Task::wait(double interrupt_after_elapsed, bool keep_lwpcb) {
   LOG(debug) << "going into blocking waitpid(" << tid << ") ...";
   ASSERT(this, !unstable) << "Don't wait for unstable tasks";
   ASSERT(this, session().is_recording() || interrupt_after_elapsed == 0);
@@ -1234,7 +1236,7 @@ void Task::wait(double interrupt_after_elapsed) {
   if (sent_wait_interrupt) {
     LOG(warn) << "  PTRACE_INTERRUPT raced with another event " << status;
   }
-  did_waitpid(status);
+  did_waitpid(status, nullptr, keep_lwpcb);
 }
 
 static bool is_in_non_sigreturn_exit_syscall(Task* t) {
@@ -1332,7 +1334,9 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     ticks += more_ticks;
     session().accumulate_ticks_processed(more_ticks);
   }
-  lwp.stop();
+  if (!keep_lwpcb)
+    lwp.stop();
+
   LOG(debug) << "  ticks = " << (ticks - more_ticks) << " + " << more_ticks;
   LOG(debug) << "  (refreshing register cache)";
   intptr_t original_syscallno = registers.original_syscallno();
@@ -1361,7 +1365,8 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   }
 
   is_stopped = true;
-  wait_status = status;
+  if (did_read_regs)
+    LOG(debug) << "IP " << ip();
   if (ptrace_event() == PTRACE_EVENT_EXIT) {
     seen_ptrace_exit_event = true;
   }
