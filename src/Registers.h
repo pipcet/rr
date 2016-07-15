@@ -296,7 +296,7 @@ public:
   void set_flags(uintptr_t value);
   bool singlestep_flag() { return flags() & X86_TF_FLAG; }
   void clear_singlestep_flag() { set_flags(flags() & ~X86_TF_FLAG); }
-  void clear_resume_flag() { set_flags(flags() & ~X86_RF_FLAG); if(0) if ((signed long)u.x64regs.orig_rax < -1) u.x64regs.orig_rax = 0; }
+  void clear_resume_flag() { set_flags(flags() & ~X86_RF_FLAG); }
   bool df_flag() const { return flags() & X86_DF_FLAG; }
 
   // End of X86-specific stuff
