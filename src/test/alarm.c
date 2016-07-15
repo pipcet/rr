@@ -21,10 +21,10 @@ int main(void) {
   sact.sa_sigaction = catcher;
   sigaction(SIGALRM, &sact, NULL);
 
-  alarm(1); /* timer will pop in 1 second */
+  alarm(15); /* timer will pop in 1 second */
 
   for (counter = 0; counter >= 0 && !caught_sig; counter++) {
-    if (counter % 100000 == 0) {
+    if (counter % 1000000 == 0) {
       write(STDOUT_FILENO, ".", 1);
     }
   }
