@@ -1078,7 +1078,7 @@ void RecordSession::signal_state_changed(RecordTask* t, StepState* step_state) {
         last_task_switchable = ALLOW_SWITCH;
       } else {
         LOG(debug) << "  " << t->tid << ": no user handler for "
-                   << signal_name(sig) << ": " << t->is_sig_blocked(sig);
+                   << signal_name(sig);
         // Don't do another task continue. We want to deliver the signal
         // as the next thing that the task does.
         step_state->continue_type = DONT_CONTINUE;
@@ -1195,7 +1195,7 @@ bool RecordSession::handle_signal_event(RecordTask* t, StepState* step_state) {
     ASSERT(t, PerfCounters::TIME_SLICE_SIGNAL == si.si_signo &&
                   (RecordTask::SYNTHETIC_TIME_SLICE_SI_CODE == si.si_code ||
                    POLL_IN == si.si_code))
-      << "Tracee is using SIGSTKFLT??? (signal=" << si.si_signo << ",code=" << si.si_code
+        << "Tracee is using SIGSTKFLT??? (code=" << si.si_code
         << ", fd=" << si.si_fd << ")";
   }
   t->stash_sig();

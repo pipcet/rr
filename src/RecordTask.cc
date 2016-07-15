@@ -899,7 +899,6 @@ void RecordTask::update_sigaction_arch(const Registers& regs) {
     read_bytes_helper(
         new_sigaction,
         sizeof(sa) - (sizeof(typename Arch::sigset_t) - sigset_size), &sa);
-    LOG(debug) << "initializing " << signal_name(sig) << " to " << sa.k_sa_handler;
     sighandlers->get(sig).init_arch<Arch>(sa);
   }
 }

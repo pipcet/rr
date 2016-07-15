@@ -457,8 +457,6 @@ public:
   /** Set the tracee's extra registers to |regs|. */
   void set_extra_regs(const ExtraRegisters& regs);
 
-  void sync_lwp_state();
-
   /**
    * Program the debug registers to the vector of watchpoint
    * configurations in |reg| (also updating the debug control
@@ -934,7 +932,6 @@ protected:
   // When |extra_registers_known|, we have saved our extra registers.
   ExtraRegisters extra_registers;
   bool extra_registers_known;
-  bool extra_registers_changed;
   // The session we're part of.
   Session* session_;
   // The task group this belongs to.
