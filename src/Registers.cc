@@ -235,10 +235,12 @@ bool Registers::fake_call(Task *task, uintptr_t ip)
 {
   assert(this->ip() != ip);
 
-  /* 128 for the red zone, 8 for the return IP */
-  u.x64regs.rsp -= 128 + 8;
+  /* 128 for the red zone, 8 for the return IP, 8 for the CS */
+  u.x64regs.rsp -= 128 + 16;
 
-  if (!task->fallible_ptrace(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(u.x64regs.rip)))
+  if (task->fallible_ptrace(PTRACE_POKEDATA, u.x64regs.rsp + 8, reinterpret_cast<void*>(u.x64regs.cs)) != 0)
+    return false;
+  if (task->fallible_ptrace(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(u.x64regs.rip)) != 0)
     return false;
 
   u.x64regs.rip = ip;
