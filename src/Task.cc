@@ -832,6 +832,9 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
     registers.fake_call(this, RR_PAGE_LWP2);
     set_regs(registers);
   }
+    
+  registers.print_register_file(stderr);
+  
   how_last_execution_resumed = how;
   set_debug_status(0);
 
@@ -1270,6 +1273,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
     struct user_regs_struct ptrace_regs;
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
       registers.set_from_ptrace(ptrace_regs);
+      registers.print_register_file(stderr);
       did_read_regs = true;
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
