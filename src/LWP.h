@@ -82,11 +82,6 @@ namespace rr {
 
     int ticks_fd() const { return fd_ticks.get(); }
 
-    /**
-     * Adjust the LWP counter to account for additional instructions
-     */
-    void adjust(Ticks);
-
     void init_buffer(remote_ptr<void> buffer, size_t buffer_size);
 
     bool write_lwpcb(remote_ptr<lwpcb> dest_lwp);

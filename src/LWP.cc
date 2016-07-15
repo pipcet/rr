@@ -267,11 +267,6 @@ Ticks LWP::read_ticks()
   return ret;
 }
 
-void LWP::adjust(Ticks diff)
-{
-  ticks_read += diff;
-}
-
 static void init_perf_event_attr(struct perf_event_attr* attr,
                                  perf_type_id type, unsigned config) {
   memset(attr, 0, sizeof(*attr));
