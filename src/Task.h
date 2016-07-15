@@ -133,7 +133,12 @@ class Task {
 
 public:
   typedef std::vector<WatchConfig> DebugRegs;
-  bool rr_page_mapped;
+
+  /**
+   * Whether the RR page has already been mapped, which is required for
+   * LWP performance counters to run.
+   */
+  bool rr_page_mapped();
 
   /**
    * We hide the destructor and require clients to call this instead. This
