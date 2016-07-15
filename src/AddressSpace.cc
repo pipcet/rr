@@ -413,7 +413,6 @@ void AddressSpace::post_exec_syscall(Task* t) {
   // us traced and untraced syscall instructions at known, fixed addresses.
   map_rr_page(t);
   map_lwp_area(t);
-  t->rr_page_mapped = true;
 }
 
 void AddressSpace::brk(remote_ptr<void> addr, int prot) {

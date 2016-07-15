@@ -59,8 +59,7 @@ static const unsigned int NUM_X86_WATCHPOINTS = 4;
 
 Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
            SupportedArch a)
-    : rr_page_mapped(false),
-      unstable(false),
+    : unstable(false),
       stable_exit(false),
       thread_locals_initialized(false),
       scratch_ptr(),
@@ -577,7 +576,6 @@ void Task::post_exec(SupportedArch a, const string& exe_file) {
    * that the address space layout for the replay tasks will
    * (should!) be the same as for the recorded tasks.  So we can
    * start validating registers at events. */
-  rr_page_mapped = false;
   session().post_exec();
 
   as->erase_task(this);
@@ -1246,6 +1244,11 @@ void Task::emulate_syscall_entry(const Registers& regs) {
   Registers r = regs;
   fixup_syscall_registers(r);
   set_regs(r);
+}
+
+bool Task::rr_page_mapped()
+{
+  return (fallible_ptrace(PTRACE_PEEKDATA, remote_ptr<void>(0x70001000), nullptr) != -1);
 }
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {

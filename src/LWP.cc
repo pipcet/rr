@@ -77,7 +77,7 @@ bool LWP::write_lwpcb(remote_ptr<struct lwpcb> dest_lwp)
 
   unsigned int i;
   for (i = 0; i < (sizeof(lwpcb) + 7) / 8; i++) {
-    if (!task->ptrace_if_alive(PTRACE_POKEDATA, dest + i, reinterpret_cast<void*>(src[i])))
+    if (task->fallible_ptrace(PTRACE_POKEDATA, dest + i, reinterpret_cast<void*>(src[i])) != 0)
       return false;
   }
 
@@ -91,6 +91,7 @@ unsigned LWP::xsave_lwp_off = 0;
 bool LWP::read_lwp_xsave()
 {
   char *buf = (char *)malloc(xsave_area_size);
+  bool ret;
   if (!buf)
     return false;
   struct iovec vec = { buf, xsave_area_size };
@@ -98,13 +99,14 @@ bool LWP::read_lwp_xsave()
     return false;
   if (vec.iov_len != xsave_area_size)
     return false;
+  ret = (buf[519] & 0x40) != 0;
   memcpy(&xsave, buf + xsave_lwp_off, sizeof xsave);
   buf[519] &= ~0x40;
   if (!task->ptrace_if_alive(PTRACE_SETREGSET, NT_X86_XSTATE, &vec))
     return false;
   free(buf);
 
-  return true;
+  return ret;
 }
 
 bool LWP::lwp_xsave_to_lwpcb()
@@ -209,6 +211,8 @@ static ScopedFd start_ticks(pid_t tid, int group_fd, struct perf_event_attr* att
 static struct perf_event_attr ticks_attr;
 void LWP::reset(Ticks ticks_period)
 {
+  if (ticks_period > 0xffffff)
+    ticks_period = 0xffffff;
   assert(ticks_period >= 0);
   assert(ticks_period <= 0xffffff);
   assert(ticks_period <= LWP_INTERVAL);
@@ -235,28 +239,36 @@ void LWP::reset(Ticks ticks_period)
   lwpcb.buffer_head_offset = lwpcb.buffer_tail_offset = 0;
   xsave.buffer_head_offset = 0;
 
-  LOG(debug) << "fd open: " << ticks_period;
+  started = true;
+  LOG(debug) << "fd open: " << saved_ticks << ", " << task->rr_page_mapped();
 }
 
 void LWP::stop()
 {
-  read_ticks();
-  saved_ticks = ticks_read;
-  LOG(debug) << "fd closed";
-  fd_ticks.close();
+  if (started) {
+    read_ticks();
+    saved_ticks = ticks_read;
+    LOG(debug) << "fd closed: " << saved_ticks << ", " << task->rr_page_mapped();
+    fd_ticks.close();
+    started = false;
+  }
 }
 
 Ticks LWP::read_ticks_nondestructively()
 {
-  long counter_value = lwpcb.event[LWP_EVENT].counter;
-  if (counter_value & LWP_SIGN)
-    counter_value |= LWP_SIGN;
-  assert(counter_value >= -2048);
-  long diff = last_ticks_period - counter_value;
-  assert(diff >= 0);
-  long ret = saved_ticks;
-  ret += diff;
-  return ret;
+  if (started) {
+    long counter_value = lwpcb.event[LWP_EVENT].counter;
+    if (counter_value & LWP_SIGN)
+      counter_value |= LWP_SIGN;
+    assert(counter_value >= -2048);
+    long diff = last_ticks_period - counter_value;
+    assert(diff >= 0);
+    long ret = saved_ticks;
+    ret += diff;
+    return ret;
+  } else {
+    return saved_ticks;
+  }
 }
 
 Ticks LWP::read_ticks()
