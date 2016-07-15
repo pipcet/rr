@@ -554,24 +554,38 @@ void Task::move_ip_before_breakpoint() {
   set_regs(r);
 }
 
-void Task::set_lwpcb() {
+bool Task::set_lwpcb() {
+  bool interrupted = false;
+  regs();
   registers.fake_call(this, RR_PAGE_LWP_THUNK);
-  while (is_in_rr_page() && !is_in_rr_page_syscall()) {
+  while (is_in_rr_page_thunk()) {
     resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
     if (is_ptrace_seccomp_event()) {
-      continue;
+      return false;
     }
-    ASSERT(this, !ptrace_event());
+    ASSERT(this, !ptrace_event()) << ptrace_event_name(ptrace_event());
     if (!stop_sig())
       continue;
-    if (stop_sig() == SIGTRAP)
+    if (stop_sig() == SIGTRAP) {
+      TrapReasons reasons = compute_trap_reasons();
+
+      if (reasons.breakpoint || reasons.watchpoint) {
+        ASSERT(this, !is_in_rr_page() || is_in_rr_page_syscall());
+        return false;
+      }
       continue;
+    }
     if (ReplaySession::is_ignored_signal(stop_sig()) &&
         session().is_replaying())
       continue;
+    if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL)
+      continue;
     ASSERT(this, session().is_recording());
     static_cast<RecordTask*>(this)->stash_sig();
+    interrupted = true;
   }
+
+  return !interrupted;
 }
 
 void Task::advance_syscall() {
