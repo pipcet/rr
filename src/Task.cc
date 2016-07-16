@@ -128,7 +128,8 @@ Task::~Task() {
 
 void Task::update_syscall_state(SyscallState old_state)
 {
-  if (old_state == ENTERING_SYSCALL_PTRACE) {
+  if (old_state == ENTERING_SYSCALL_PTRACE &&
+      how_last_execution_resumed == RESUME_SYSCALL) {
     if (wait_status.is_syscall() ||
         wait_status.ptrace_event() ||
         wait_status.fatal_sig())
