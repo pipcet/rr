@@ -233,8 +233,6 @@ void Registers::print_register_file_arch(FILE* f, const char* formats[]) const {
 
 bool Registers::fake_call(Task *task, uintptr_t ip)
 {
-  assert(this->ip() != ip);
-
   /* 128 for the red zone, 8 for the return IP, 8 for the CS */
   u.x64regs.rsp -= 128 + 16;
 
