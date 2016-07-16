@@ -228,7 +228,8 @@ static bool checksum_segment_filter(const AddressSpace::Mapping& m) {
   struct stat st;
   int may_diverge;
 
-  if (m.map.fsname() == "[vsyscall]" || m.map.fsname() == "[lwp]") {
+  if (m.map.fsname() == "[vsyscall]" || m.map.fsname() == "[lwp]" ||
+      m.map.fsname() == "[stack]") {
     // This can't be read/checksummed.
     return false;
   }
