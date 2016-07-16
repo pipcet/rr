@@ -65,7 +65,7 @@ def write_rr_page(f, is_64, is_replay):
         f.write(bytes)
 
     thunk_bytes = bytearray([
-        0x0f, 0x05,
+        0x90, 0x90,
         0x90, 0x90,
         0x9c,                          # pushfq
         0x50,                          # push %rax
