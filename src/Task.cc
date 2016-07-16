@@ -564,8 +564,8 @@ void Task::move_ip_before_breakpoint() {
 bool Task::set_lwpcb() {
   bool interrupted = false;
   regs();
-  registers.fake_call(this, RR_PAGE_LWP_THUNK+2);
-  while (is_in_rr_page_thunk()) {
+  registers.fake_call(this, RR_PAGE_LWP_THUNK+6);
+  while (is_in_rr_page_thunk() || (is_in_rr_page() && ip() != 0x70000000 && ip() != 0x70000002)) {
     resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
     if (is_ptrace_seccomp_event()) {
       LOG(debug) << "aborting set_lwpcb: seccomp event";
@@ -1458,7 +1458,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   // During replay most untraced syscalls are replaced with "xor eax,eax" so
   // rcx is always -1, but during recording it sometimes isn't after we've
   // done a real syscall.
-  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page_syscall()) {
+  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page()) {
     fixup_syscall_registers(registers);
     need_to_set_regs = true;
   }
