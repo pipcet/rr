@@ -141,6 +141,7 @@ public:
    */
   bool is_real_device() const { return device() > NO_DEVICE; }
   bool is_vdso() const { return fsname() == "[vdso]"; }
+  bool is_lwp() const { return fsname() == "[lwp]"; }
   bool is_heap() const { return fsname() == "[heap]"; }
   bool is_stack() const { return fsname().find("[stack") == 0; }
   bool is_vvar() const { return fsname() == "[vvar]"; }
