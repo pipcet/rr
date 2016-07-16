@@ -128,22 +128,25 @@ Task::~Task() {
 
 void Task::update_syscall_state(SyscallState old_state)
 {
-  if (old_state == ENTERING_SYSCALL_PTRACE &&
-      how_last_execution_resumed == RESUME_SYSCALL) {
+  if (old_state == ENTERING_SYSCALL_PTRACE) {
     if (wait_status.is_syscall() ||
         wait_status.ptrace_event() ||
         wait_status.fatal_sig())
       syscall_state = EXITING_SYSCALL;
-    else
-      abort();
+    else {
+      LOG(debug) << "problematic wait_status " << wait_status;
+      syscall_state = EXITING_SYSCALL;
+      //abort();
+    }
   } else {
     if (wait_status.is_syscall())
       syscall_state = ENTERING_SYSCALL_PTRACE;
     else
       syscall_state = NO_SYSCALL;
   }
-  
-  LOG(debug) << "syscall_state " << old_state << " -> " << syscall_state;
+
+  LOG(debug) << "syscall_state " << old_state << " -> " << syscall_state <<
+    " wait_status " << wait_status << " old IP " << address_of_last_execution_resume;
 }
 
 void Task::update_syscall_state()
