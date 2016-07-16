@@ -142,6 +142,8 @@ void Task::update_syscall_state(SyscallState old_state)
     else
       syscall_state = NO_SYSCALL;
   }
+  
+  LOG(debug) << "syscall_state " << old_state << " -> " << syscall_state;
 }
 
 void Task::update_syscall_state()
@@ -565,7 +567,10 @@ bool Task::set_lwpcb() {
       LOG(debug) << "aborting set_lwpcb: seccomp event";
       return false;
     }
-    ASSERT(this, !ptrace_event()) << ptrace_event_name(ptrace_event());
+    if (ptrace_event()) {
+      LOG(debug) << "aborting set:lwpcb: ptrace event: " << ptrace_event_name(ptrace_event());
+      return false;
+    }
     if (!stop_sig()) {
       LOG(debug) << "stopped with " << wait_status;
       continue;
@@ -792,6 +797,7 @@ TrapReasons Task::compute_trap_reasons() {
   TrapReasons reasons;
   uintptr_t status = debug_status();
 
+  LOG(debug) << "c_t_r " << address_of_last_execution_resume << " " << how_last_execution_resumed;
   // During replay we execute syscall instructions in certain cases, e.g.
   // mprotect with syscallbuf. The kernel does not set DS_SINGLESTEP when we
   // step over those instructions so we need to detect that here.
@@ -800,6 +806,7 @@ TrapReasons Task::compute_trap_reasons() {
       ip() ==
           address_of_last_execution_resume +
               syscall_instruction_length(arch())) {
+    LOG(debug) << "recognized single-step";
     reasons.singlestep = true;
   } else {
     reasons.singlestep = (status & DS_SINGLESTEP) != 0;
@@ -948,7 +955,22 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
     // wait() will see this and report the ptrace-exit event.
     detected_unexpected_exit = true;
   } else {
+#if 0
+    struct user_regs_struct ptrace_regs;
+    if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
+      registers.set_from_ptrace(ptrace_regs);
+      LOG(debug) << "pre: " << ip() << " " << regs().original_syscallno();
+      regs().print_register_file(stderr);
+    }
     ptrace_if_alive(how, nullptr, (void*)(uintptr_t)sig);
+    if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
+      registers.set_from_ptrace(ptrace_regs);
+      LOG(debug) << "post: " << ip() << " " << regs().original_syscallno();
+      regs().print_register_file(stderr);
+    }
+#else
+    ptrace_if_alive(how, nullptr, (void*)(uintptr_t)sig);
+#endif
   }
 
   is_stopped = false;
@@ -1390,6 +1412,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   }
 
   is_stopped = true;
+  fallible_ptrace(PTRACE_PEEKDATA, 0x70000100, nullptr);
   if (did_read_regs)
     LOG(debug) << "IP " << ip();
   if (ptrace_event() == PTRACE_EVENT_EXIT) {

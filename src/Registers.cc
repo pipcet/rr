@@ -242,6 +242,7 @@ bool Registers::fake_call(Task *task, uintptr_t ip)
     return false;
 
   u.x64regs.rip = ip;
+  LOG(debug) << "fake_call " << ip << " " << u.x64regs.orig_rax;
 
   task->set_regs(*this);
 
