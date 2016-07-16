@@ -398,6 +398,7 @@ void RecordSession::task_continue(const StepState& step_state) {
   ASSERT(t, !t->emulated_stop_pending);
 
   bool may_restart = t->at_may_restart_syscall();
+  bool set_lwpcb = false;
 
   if (may_restart && t->seccomp_bpf_enabled) {
     LOG(debug) << "  PTRACE_SYSCALL to possibly-restarted " << t->ev();
@@ -431,6 +432,7 @@ void RecordSession::task_continue(const StepState& step_state) {
       LOG(debug)
           << "Clearing singlestep because we're about to enter a syscall";
       singlestep = false;
+      set_lwpcb = true;
     }
     if (singlestep) {
       resume = RESUME_SINGLESTEP;
@@ -442,6 +444,7 @@ void RecordSession::task_continue(const StepState& step_state) {
          * record in the traditional way (with PTRACE_SYSCALL)
          * until it is installed. */
         resume = RESUME_SYSCALL;
+        set_lwpcb = true;
       } else {
         /* When the seccomp filter is on, instead of capturing
          * syscalls by using PTRACE_SYSCALL, the filter will
@@ -457,7 +460,7 @@ void RecordSession::task_continue(const StepState& step_state) {
       }
     }
   }
-  t->resume_execution(resume, RESUME_NONBLOCKING, ticks_request);
+  t->resume_execution(resume, RESUME_NONBLOCKING, ticks_request, 0, set_lwpcb);
 }
 
 /**
