@@ -296,7 +296,8 @@ void AddressSpace::map_lwp_area(Task* t) {
     t->lwp.write_lwpcb(lwpcb_start());
   }
 
-  map(lwp_area_start(), lwp_area_size(), prot, flags, 0, "", 0, 0);
+  map(lwp_area_start(), lwp_area_size(), prot, flags, 0, "[lwp]",
+      KernelMapping::NO_DEVICE, KernelMapping::NO_INODE);
 }
 
 /**
