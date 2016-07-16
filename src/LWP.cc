@@ -122,11 +122,16 @@ bool LWP::lwp_xsave_to_lwpcb()
   if (xsave.flags) {
     /* Flags should be unchanged.
      *
-     * Family 15h revision 00h-0fh: flag 0x80000000 cleared.
+     * Family 15h revision 00h-0fh: flags 0x80000008 -> 0x00000008
      */
     if (lwpcb.flags != xsave.flags) {
       LOG(info) << "LWP flags changed from " << lwpcb.flags << " to "
                 << xsave.flags << "\n";
+      if (lwpcb.flags == 0x80000008 && xsave.flags == 8) {
+        LOG(info) << "this is a known CPU issue";
+      } else {
+        lwpcb.flags = xsave.flags;
+      }
     }
     assert(lwpcb.buffer_size == xsave.buffer_size);
     assert(lwpcb.buffer_base == xsave.buffer_base);
@@ -138,7 +143,6 @@ bool LWP::lwp_xsave_to_lwpcb()
                 << xsave.filters << "\n";
     }
 
-    lwpcb.flags = xsave.flags;
     lwpcb.buffer_size = xsave.buffer_size;
     lwpcb.buffer_base = xsave.buffer_base;
     if (lwpcb.buffer_head_offset != xsave.buffer_head_offset) {
