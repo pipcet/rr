@@ -432,7 +432,6 @@ void RecordSession::task_continue(const StepState& step_state) {
       LOG(debug)
           << "Clearing singlestep because we're about to enter a syscall";
       singlestep = false;
-      set_lwpcb = true;
     }
     if (singlestep) {
       resume = RESUME_SINGLESTEP;
@@ -444,7 +443,6 @@ void RecordSession::task_continue(const StepState& step_state) {
          * record in the traditional way (with PTRACE_SYSCALL)
          * until it is installed. */
         resume = RESUME_SYSCALL;
-        set_lwpcb = true;
       } else {
         /* When the seccomp filter is on, instead of capturing
          * syscalls by using PTRACE_SYSCALL, the filter will
