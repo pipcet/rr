@@ -1402,6 +1402,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
+      wait_status = status;
     }
   }
   if (status.stop_sig()) {
@@ -1411,6 +1412,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
       if (!ptrace_if_alive(PTRACE_GETSIGINFO, nullptr, &pending_siginfo)) {
         LOG(debug) << "Unexpected process death for " << tid;
         status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
+        wait_status = status;
       }
     }
   }
