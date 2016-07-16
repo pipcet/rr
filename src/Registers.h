@@ -69,6 +69,7 @@ public:
    * task. Actually, on x86-64, add an extra 128 bytes of reserved
    * stack space for the red zone. */
   bool fake_call(Task* task, uintptr_t ip);
+  bool adjust_fake_call_ip(Task* task);
 
   /**
    * Copy a user_regs_struct into these Registers. If the tracee architecture

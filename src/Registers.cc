@@ -250,6 +250,14 @@ bool Registers::fake_call(Task *task, uintptr_t ip)
   return true;
 }
 
+bool Registers::adjust_fake_call_ip(Task* task)
+{
+  uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
+  task->fallible_ptrace(PTRACE_POKEDATA, u.x64regs.rsp, reinterpret_cast<void*>(ip));
+
+  return true;
+}
+
 void Registers::print_register_file(FILE* f) const {
   RR_ARCH_FUNCTION(print_register_file_arch, arch(), f, hex_format_leading_0x);
 }
