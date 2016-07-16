@@ -558,7 +558,7 @@ void Task::move_ip_before_breakpoint() {
 bool Task::set_lwpcb() {
   bool interrupted = false;
   regs();
-  registers.fake_call(this, RR_PAGE_LWP_THUNK);
+  registers.fake_call(this, RR_PAGE_LWP_THUNK+2);
   while (is_in_rr_page_thunk()) {
     resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
     if (is_ptrace_seccomp_event()) {
