@@ -582,14 +582,6 @@ bool Task::set_lwpcb() {
     if (stop_sig() == SIGTRAP) {
       TrapReasons reasons = compute_trap_reasons();
 
-      if (ip() == 0x70000105) {
-        LOG(debug) << "interrupted syscall at *" << registers.sp() << " at " << ticks << " ticks";
-        regs();
-        registers.set_ip(0x7000011e);
-        set_regs(registers);
-        return false;
-      }
-
       if (reasons.breakpoint || reasons.watchpoint) {
         ASSERT(this, !is_in_rr_page() || is_in_rr_page_syscall());
         return false;
