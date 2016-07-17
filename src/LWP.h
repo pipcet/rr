@@ -13,14 +13,21 @@
  * 0x4000000 - LwpPTSC: performance time stamp counter in event record
  * 0x2000000 - LwpCont: continuous mode sampling. This is required(?!).
  */
-#define LWP_FLAGS 0x80000008L
-#define LWP_EVENT          2L
-#define LWP_FILTER 0x28000000L
-#define LWP_FILTERS 0x28000000L
-#define LWP_OFFSET 0
-#define LWP_MAX_PERIOD 0xffffffL
-#define LWP_INTERVAL 0x1ffffffL
-#define LWP_SIGN 0xffffffffff000000L
+
+#define LWP_FLAGS_THRESHOLD_INT  0x80000000L
+#define LWP_FLAGS_BRANCHES       (1LL<<(LWP_EVENT_BRANCHES+1))
+
+#define LWP_EVENT_BRANCHES                2L
+
+#define LWP_FILTER_NO_RELATIVE_BRANCHES  0x20000000L
+#define LWP_FILTER_NO_ABSOLUTE_BRANCHES  0x08000000L
+
+#define LWP_FLAGS       (LWP_FLAGS_THRESHOLD_INT|LWP_FLAGS_BRANCHES)
+#define LWP_EVENT       LWP_EVENT_BRANCHES
+#define LWP_FILTERS     (LWP_FILTER_NO_ABSOLUTE_BRANCHES|LWP_FILTER_NO_RELATIVE_BRANCHES)
+#define LWP_MAX_PERIOD            0xffffffL
+#define LWP_INTERVAL             0x1ffffffL
+#define LWP_SIGN        0xffffffffff000000L
 
 struct perf_event_attr;
 
