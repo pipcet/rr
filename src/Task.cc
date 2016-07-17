@@ -128,20 +128,21 @@ Task::~Task() {
 
 void Task::update_syscall_state(SyscallState old_state)
 {
-  if (old_state == ENTERING_SYSCALL_PTRACE &&
-      how_last_execution_resumed == RESUME_SYSCALL) {
-    if (wait_status.is_syscall() ||
-        wait_status.ptrace_event() ||
-        wait_status.fatal_sig())
+  if (old_state == ENTERING_SYSCALL_PTRACE) {
+    if (wait_status.is_syscall()) {
       syscall_state = EXITING_SYSCALL;
-    else {
-      LOG(debug) << "problematic wait_status " << wait_status;
+    } else if (wait_status.ptrace_event() ||
+               wait_status.fatal_sig()) {
+    } else {
+      LOG(debug) << "problematic wait_status " << wait_status << " after " << how_last_execution_resumed;
       syscall_state = EXITING_SYSCALL;
       //abort();
     }
   } else {
     if (wait_status.is_syscall())
       syscall_state = ENTERING_SYSCALL_PTRACE;
+    else if (wait_status.ptrace_event() == PTRACE_EVENT_SECCOMP)
+      syscall_state = ENTERING_SYSCALL;
     else
       syscall_state = NO_SYSCALL;
   }
