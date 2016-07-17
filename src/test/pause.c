@@ -11,6 +11,7 @@ int main(void) {
   signal(SIGALRM, handle_signal);
   alarm(1);
   atomic_puts("set alarm for 1 sec from now; pausing ...");
+  test_assert(caught_signal == 0);
   pause();
   err = errno;
 
