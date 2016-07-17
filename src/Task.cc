@@ -635,14 +635,8 @@ void Task::exit_syscall_and_prepare_restart() {
   // the tracee trapped at the syscall.
   r.set_original_syscallno(-1);
   r.set_syscallno(syscallno);
-  if (r.ip() == 0x70000101 || is_in_rr_page_thunk()) {
-    LOG(debug) << "e_s_a_p_r @" << r.ip();
-    r.set_sp(r.sp() + 8 + 128 + 16);
-    r.set_ip(0x70000000);
-  } else {
-    LOG(debug) << "!e_s_a_p_r @" << r.ip();
-    r.set_ip(r.ip() - syscall_instruction_length(r.arch()));
-  }
+  r.set_ip(r.ip() - syscall_instruction_length(r.arch()));
+
   set_regs(r);
 }
 
