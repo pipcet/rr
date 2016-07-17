@@ -600,6 +600,7 @@ bool Task::set_lwpcb() {
     interrupted = true;
   }
 
+  set_regs(registers);
   return !interrupted;
 }
 
@@ -912,6 +913,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         if (!set_lwpcb()) {
           LOG(debug) << "couldn't, resetting syscallno to " << syscallno;
           registers.set_original_syscallno(syscallno);
+          set_regs(registers);
           return true;
         }
 
@@ -919,6 +921,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
       }
     }
     registers.set_original_syscallno(syscallno);
+    set_regs(registers);
   }
 
   LOG(debug) << "resuming execution of " << tid << " with "
