@@ -583,7 +583,6 @@ bool Task::set_lwpcb() {
       TrapReasons reasons = compute_trap_reasons();
 
       if (reasons.breakpoint || reasons.watchpoint) {
-        ASSERT(this, !is_in_rr_page() || is_in_rr_page_syscall());
         return false;
       }
       continue;
