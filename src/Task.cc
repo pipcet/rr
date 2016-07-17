@@ -557,7 +557,6 @@ void Task::on_syscall_exit(int syscallno, const Registers& regs) {
 void Task::move_ip_before_breakpoint() {
   // TODO: assert that this is at a breakpoint trap.
   Registers r = regs();
-  LOG(debug) << "mibb " << ip();
   r.set_ip(r.ip().decrement_by_bkpt_insn_length(arch()));
   set_regs(r);
 }
@@ -819,7 +818,6 @@ TrapReasons Task::compute_trap_reasons() {
       ip() ==
           address_of_last_execution_resume +
               syscall_instruction_length(arch())) {
-    LOG(debug) << "recognized single-step";
     reasons.singlestep = true;
   } else {
     reasons.singlestep = (status & DS_SINGLESTEP) != 0;
@@ -861,8 +859,6 @@ TrapReasons Task::compute_trap_reasons() {
      * right.  The SI_KERNEL code is seen in the int3 test, so we
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
-    if (is_in_rr_page_thunk())
-      reasons.breakpoint = false;
     if (reasons.breakpoint) {
       ASSERT(this, as->is_breakpoint_instruction(this, ip_at_breakpoint))
           << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "

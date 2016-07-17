@@ -70,7 +70,6 @@ public:
    * stack space for the red zone. */
   bool fake_call(Task* task, uintptr_t ip);
   bool undo_fake_call(Task* task, intptr_t delta);
-  bool adjust_fake_call_ip(Task* task);
 
   /**
    * Copy a user_regs_struct into these Registers. If the tracee architecture

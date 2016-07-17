@@ -38,14 +38,12 @@ public:
   bool operator<(const remote_code_ptr& other) const { return ptr < other.ptr; }
 
   remote_code_ptr decrement_by_syscall_insn_length(SupportedArch arch) const {
-    //std::cerr << ptr << " - 2 from " << __builtin_return_address(0) << "\n";
     return remote_code_ptr(ptr - rr::syscall_instruction_length(arch));
   }
   remote_code_ptr increment_by_syscall_insn_length(SupportedArch arch) const {
     return remote_code_ptr(ptr + rr::syscall_instruction_length(arch));
   }
   remote_code_ptr decrement_by_bkpt_insn_length(SupportedArch) const {
-    //std::cerr << ptr << " - 1 from " << __builtin_return_address(0) << "\n";
     return remote_code_ptr(ptr - 1);
   }
   remote_code_ptr increment_by_bkpt_insn_length(SupportedArch) const {

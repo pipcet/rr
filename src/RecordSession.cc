@@ -398,7 +398,6 @@ void RecordSession::task_continue(const StepState& step_state) {
   ASSERT(t, !t->emulated_stop_pending);
 
   bool may_restart = t->at_may_restart_syscall();
-  bool set_lwpcb = false;
 
   if (may_restart && t->seccomp_bpf_enabled) {
     LOG(debug) << "  PTRACE_SYSCALL to possibly-restarted " << t->ev();
@@ -458,7 +457,7 @@ void RecordSession::task_continue(const StepState& step_state) {
       }
     }
   }
-  t->resume_execution(resume, RESUME_NONBLOCKING, ticks_request, 0, set_lwpcb);
+  t->resume_execution(resume, RESUME_NONBLOCKING, ticks_request);
 }
 
 /**
