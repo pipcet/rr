@@ -572,7 +572,7 @@ bool Task::set_lwpcb() {
       return false;
     }
     if (ptrace_event()) {
-      LOG(debug) << "aborting set:lwpcb: ptrace event: " << ptrace_event_name(ptrace_event());
+      LOG(debug) << "aborting set_lwpcb: ptrace event: " << ptrace_event_name(ptrace_event());
       return false;
     }
     if (!stop_sig()) {
@@ -801,7 +801,6 @@ TrapReasons Task::compute_trap_reasons() {
   TrapReasons reasons;
   uintptr_t status = debug_status();
 
-  LOG(debug) << "c_t_r " << address_of_last_execution_resume << " " << how_last_execution_resumed;
   // During replay we execute syscall instructions in certain cases, e.g.
   // mprotect with syscallbuf. The kernel does not set DS_SINGLESTEP when we
   // step over those instructions so we need to detect that here.
@@ -911,7 +910,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         lwp.read_lwp_xsave(true);
         LOG(debug) << "starting LWP";
         if (!set_lwpcb()) {
-          LOG(debug) << "couldn't";
+          LOG(debug) << "couldn't, resetting syscallno to " << syscallno;
           registers.set_original_syscallno(syscallno);
           return true;
         }

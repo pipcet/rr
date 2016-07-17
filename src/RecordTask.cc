@@ -1004,6 +1004,7 @@ bool RecordTask::is_syscall_restart() {
     goto done;
   }
 
+  LOG(debug) << "INTERRUPTED SYSCALL";
   /* It's possible for the tracee to resume after a sighandler
    * with a fresh syscall that happens to be the same as the one
    * that was interrupted.  So we check here if the args are the
