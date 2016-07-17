@@ -1393,11 +1393,19 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   // Skip reading registers in a PTRACE_EVENT_EXEC, since
   // we may not know the correct architecture.
   bool did_read_regs = false;
+  bool need_to_set_regs = false;
   if (status.ptrace_event() != PTRACE_EVENT_EXEC) {
     struct user_regs_struct ptrace_regs;
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
+      uintptr_t syscallno = registers.syscallno();
       registers.set_from_ptrace(ptrace_regs);
       did_read_regs = true;
+      if (registers.ip() == 0x70000105) {
+        LOG(debug) << "Interrupted syscall, resetting rax to " << syscallno;
+        registers.set_syscallno(syscallno);
+        registers.undo_fake_call(this, 0);
+        need_to_set_regs = true;
+      }
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
@@ -1423,7 +1431,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     seen_ptrace_exit_event = true;
   }
 
-  bool need_to_set_regs = false;
   if (registers.singlestep_flag()) {
     registers.clear_singlestep_flag();
     need_to_set_regs = true;
