@@ -1418,7 +1418,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   }
 
   is_stopped = true;
-  fallible_ptrace(PTRACE_PEEKDATA, 0x70000100, nullptr);
   if (did_read_regs)
     LOG(debug) << "IP " << ip();
   if (ptrace_event() == PTRACE_EVENT_EXIT) {
