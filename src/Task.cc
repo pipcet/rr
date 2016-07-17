@@ -878,7 +878,14 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << (sig ? string(", signal ") + signal_name(sig) : string())
              << " at ip " << ip()
              << " (previously " << address_of_last_execution_resume2 << ")"
-             << " ticks " << tick_period;
+             << " ticks " << tick_period
+             << " syscall state " << syscall_state;
+
+  if (syscall_state == ENTERING_SYSCALL_PTRACE ||
+      syscall_state == ENTERING_SYSCALL ||
+      is_at_syscall_instruction(this, ip())) {
+    tick_period = RESUME_NO_TICKS;
+  }
 
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
   // Always resetting here, and always to a nonzero number, improves
