@@ -861,7 +861,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
                             TicksRequest tick_period, int sig,
                             bool lwpcb_set) {
   remote_code_ptr address_of_last_execution_resume2 = address_of_last_execution_resume;
-  bool __attribute__((unused)) called_set_lwpcb = false;
 
   LOG(debug) << "(I) resuming execution of " << tid << " with "
              << ptrace_req_name(how)
@@ -915,8 +914,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
           set_regs(registers);
           return true;
         }
-
-        called_set_lwpcb = true;
       }
     }
     registers.set_original_syscallno(syscallno);
