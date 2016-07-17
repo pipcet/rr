@@ -249,6 +249,17 @@ bool Registers::fake_call(Task *task, uintptr_t ip)
   return true;
 }
 
+bool Registers::undo_fake_call(Task *task, intptr_t offset)
+{
+  uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
+
+  u.x64regs.rsp += 128 + 16;
+
+  u.x64regs.rip = ip + offset;
+
+  return true;
+}
+
 bool Registers::adjust_fake_call_ip(Task* task)
 {
   uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
