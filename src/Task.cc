@@ -1375,7 +1375,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
 
   Ticks more_ticks = 0;
   if (rr_page_mapped() && !keep_lwpcb) {
-    if (lwp.read_lwp_xsave(syscall_state != ENTERING_SYSCALL_PTRACE)) {
+    if (lwp.read_lwp_xsave(true)) {
       lwp.lwp_xsave_to_lwpcb();
       more_ticks = lwp.read_ticks();
     } else {
