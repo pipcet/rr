@@ -1456,7 +1456,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   // During replay most untraced syscalls are replaced with "xor eax,eax" so
   // rcx is always -1, but during recording it sometimes isn't after we've
   // done a real syscall.
-  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page()) {
+  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page_syscall()) {
     fixup_syscall_registers(registers);
     need_to_set_regs = true;
   }
