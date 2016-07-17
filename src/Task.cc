@@ -1381,9 +1381,9 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
     // whatever they pick up something spurious later.
     lwp.stop();
-    ticks += more_ticks;
-    session().accumulate_ticks_processed(more_ticks);
   }
+  ticks += more_ticks;
+  session().accumulate_ticks_processed(more_ticks);
   if (!keep_lwpcb)
     lwp.stop();
 
