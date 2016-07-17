@@ -81,7 +81,7 @@ def write_rr_page(f, is_64, is_replay):
         # there. The 0xeb combines with the 0x90 of the following nop
         # byte to jump back to code prior to this on the rr page (at
         # 0x70000097), which jumps forward to 0x70000100, which jumps
-        # to 0x70000120, where the return address on the stack is
+        # to 0x70000122, where the return address on the stack is
         # mangled to retry the syscall instruction instead; we then
         # lretq.
         #
@@ -91,16 +91,27 @@ def write_rr_page(f, is_64, is_replay):
         # offset for the preceding jmp opcode. But it might help, anyway!
         0xeb, 0x18,
         0xeb, 0x02,
-        0x90, 0xeb,
+        0x90, 0xcc,
         0x90, 0x90,
-        0x9c,                          # pushfq
         0x50,                          # push %rax
+        0x9c,                          # pushfq
         0xb8, 0x00, 0x10, 0x00, 0x70,  # mov $0x70001000,%eax
         0x8f, 0xe9, 0xf8, 0x12, 0xc0,  # llwpcb %rax
-        0x58,                          # pop %rax
         0x9d,                          # popfq
+        0x58,                          # pop %rax
         0x48, 0xca, 0x80, 0x00,        # lretq $0x80
-        # 0x48, 0x83, 0x2c, 0x24, 0x02,  # subq $2, (%rsp)
+        0x90,
+        0x90,
+        0x90,
+        0x90,
+        0x50,                          # push %rax
+        0x9c,                          # pushfq
+        0xb8, 0x00, 0x10, 0x00, 0x70,  # mov $0x70001000,%eax
+        0x8f, 0xe9, 0xf8, 0x12, 0xc0,  # llwpcb %rax
+        0x48, 0x83, 0x6c, 0x24, 0x10, 0x02,  # subq $2, 0x10(%rsp)
+        0x9d,                          # popfq
+        0x58,                          # pop %rax
+        # 0x48, 0xc7, 0xc0, 0xfc, 0xff, 0xff, 0xff,
         0x48, 0xca, 0x80, 0x00,        # lretq $0x80
         0x48, 0xcb,
         0x03,
