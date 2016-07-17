@@ -890,7 +890,9 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << " ticks " << tick_period
              << " syscall state " << syscall_state;
 
-  if (syscall_state == ENTERING_SYSCALL_PTRACE ||
+  /* This is annoying. The SECCOMP/SYSCALL/SYSCALL rhythm no longer applies
+   * when there is a bad syscall. */
+  if ((syscall_state == ENTERING_SYSCALL_PTRACE && registers.syscallno() >= 0 && registers.syscallno() <= 511) ||
       syscall_state == ENTERING_SYSCALL ||
       is_at_syscall_instruction(this, ip())) {
     tick_period = RESUME_NO_TICKS;
