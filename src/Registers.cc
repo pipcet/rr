@@ -240,9 +240,9 @@ bool Registers::fake_call_arch<rr::X86Arch>(Task* task, uintptr_t ip)
    * the below code should be fine in either case. */
   u.x86regs.esp -= 128 + 8;
 
-  if (task->fallible_ptrace(PTRACE_POKEDATA, u.x86regs.esp, reinterpret_cast<void*>(u.x86regs.eip)) != 0)
+  if (task->fallible_ptrace(PTRACE_POKEDATA, (unsigned int)u.x86regs.esp, reinterpret_cast<void*>(u.x86regs.eip)) != 0)
     return false;
-  if (task->fallible_ptrace(PTRACE_POKEDATA, u.x86regs.esp + 4, reinterpret_cast<void*>(u.x86regs.xcs)) != 0)
+  if (task->fallible_ptrace(PTRACE_POKEDATA, (unsigned int)(u.x86regs.esp + 4), reinterpret_cast<void*>(u.x86regs.xcs)) != 0)
     return false;
 
   u.x86regs.eip = ip;
@@ -277,9 +277,11 @@ bool Registers::fake_call(Task *task, uintptr_t ip)
 }
 
 template<>
-bool Registers::undo_fake_call_arch<rr::X64Arch>(Task *task, intptr_t offset)
+bool Registers::undo_fake_call_arch<rr::X64Arch>(Task* task, intptr_t offset)
 {
+  errno = 0;
   uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
+  ASSERT(task, errno == 0);
 
   u.x64regs.rsp += 128 + 16;
 
@@ -289,9 +291,11 @@ bool Registers::undo_fake_call_arch<rr::X64Arch>(Task *task, intptr_t offset)
 }
 
 template<>
-bool Registers::undo_fake_call_arch<rr::X86Arch>(Task *task, intptr_t offset)
+bool Registers::undo_fake_call_arch<rr::X86Arch>(Task* task, intptr_t offset)
 {
-  uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x86regs.esp, nullptr);
+  errno = 0;
+  uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, (unsigned int)u.x86regs.esp, nullptr);
+  ASSERT(task, errno == 0);
 
   u.x86regs.esp += 128 + 8;
 
@@ -303,13 +307,6 @@ bool Registers::undo_fake_call_arch<rr::X86Arch>(Task *task, intptr_t offset)
 bool Registers::undo_fake_call(Task* task, intptr_t offset)
 {
   RR_ARCH_FUNCTION(undo_fake_call_arch, arch(), task, offset);
-  uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
-
-  u.x64regs.rsp += 128 + 16;
-
-  u.x64regs.rip = ip + offset;
-
-  return true;
 }
 
 void Registers::print_register_file(FILE* f) const {
