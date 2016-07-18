@@ -342,7 +342,7 @@ public:
   /**
    * Set the LWPCB, single-stepping through the RR page as necessary.
    */
-  bool set_lwpcb();
+  bool set_lwpcb(bool);
 
   /**
    * Return the "task name"; i.e. what |prctl(PR_GET_NAME)| or
@@ -448,7 +448,7 @@ public:
    */
   bool resume_execution(ResumeRequest how, WaitRequest wait_how,
                         TicksRequest tick_period, int sig = 0,
-                        bool lwpcb_set = false);
+                        bool lwpcb_set = false, bool stash_signals = true);
 
   /** Return the session this is part of. */
   Session& session() const { return *session_; }

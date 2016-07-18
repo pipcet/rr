@@ -602,19 +602,24 @@ void Task::move_ip_before_breakpoint() {
   set_regs(r);
 }
 
-bool Task::set_lwpcb() {
+bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
   bool interrupted = false;
-  regs();
+  Registers r = regs();
   registers.fake_call(this, RR_PAGE_LWP_THUNK+6);
   while (is_in_rr_page_thunk() || (is_in_rr_page() && ip() != 0x70000000 && ip() != 0x70000002)) {
-    resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
+    if (resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true)) {
+      interrupted = true;
+      break;
+    }
     if (is_ptrace_seccomp_event()) {
       LOG(debug) << "aborting set_lwpcb: seccomp event";
-      return false;
+      interrupted = true;
+      break;
     }
     if (ptrace_event()) {
       LOG(debug) << "aborting set_lwpcb: ptrace event: " << ptrace_event_name(ptrace_event());
-      return false;
+      interrupted = true;
+      break;
     }
     if (!stop_sig()) {
       LOG(debug) << "stopped with " << wait_status;
@@ -623,10 +628,9 @@ bool Task::set_lwpcb() {
     if (stop_sig() == SIGTRAP) {
       TrapReasons reasons = compute_trap_reasons();
 
-      if (reasons.breakpoint || reasons.watchpoint) {
-        return false;
+      if (!reasons.breakpoint && !reasons.watchpoint) {
+        continue;
       }
-      continue;
     }
     if (ReplaySession::is_ignored_signal(stop_sig()) &&
         session().is_replaying())
@@ -635,18 +639,26 @@ bool Task::set_lwpcb() {
       LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
       continue;
     }
+    interrupted = true;
     ASSERT(this, session().is_recording());
     static_cast<RecordTask*>(this)->stash_sig();
-    interrupted = true;
+    break;
   }
 
-  set_regs(registers);
+  set_regs(r);
+  if (interrupted) {
+    lwp.read_lwp_xsave(true);
+    lwp.stop();
+  }
   return !interrupted;
 }
 
 void Task::advance_syscall() {
   while (true) {
-    resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS, 0, true);
+    LOG(debug) << "advance_syscall";
+    if (resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS))
+      break;
+    LOG(debug) << "advance_syscall: " << wait_status;
     if (is_ptrace_seccomp_event()) {
       continue;
     }
@@ -900,7 +912,7 @@ static const Property<bool, AddressSpace> thread_locals_initialized_property;
 
 bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
                             TicksRequest tick_period, int sig,
-                            bool lwpcb_set) {
+                            bool lwpcb_set, bool stash_signals) {
   remote_code_ptr address_of_last_execution_resume2 = address_of_last_execution_resume;
 
   LOG(debug) << "(I) resuming execution of " << tid << " with "
@@ -949,7 +961,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
       if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
         lwp.read_lwp_xsave(true);
         LOG(debug) << "starting LWP";
-        if (!set_lwpcb()) {
+        if (!set_lwpcb(stash_signals&&false)) {
           LOG(debug) << "couldn't, resetting syscallno to " << syscallno;
           registers.set_original_syscallno(syscallno);
           set_regs(registers);
