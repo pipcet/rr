@@ -85,7 +85,13 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       extra_registers_known(false),
       session_(&session),
       top_of_stack(),
-      seen_ptrace_exit_event(false) {}
+      syscall_state(NO_SYSCALL),
+      seen_ptrace_exit_event(false),
+      update_syscall_count(0),
+      ptrace_cont_count(0),
+      extra_waitpids(0),
+      syscall_state_registers(a)
+{}
 
 void Task::destroy() {
   LOG(debug) << "task " << tid << " (rec:" << rec_tid << ") is dying ...";
@@ -126,29 +132,66 @@ Task::~Task() {
   LOG(debug) << "  dead";
 }
 
-void Task::update_syscall_state(SyscallState old_state)
+void Task::update_syscall_state(SyscallState old_state, WaitStatus status)
 {
+  update_syscall_count++;
+
+  struct user_regs_struct ptrace_regs;
+  Registers r(arch());
+  ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs);
+  r.set_from_ptrace(ptrace_regs);
+
   if (old_state == ENTERING_SYSCALL_PTRACE) {
-    if (wait_status.is_syscall()) {
+    if (status.is_syscall() || status.get() == 0) {
       syscall_state = EXITING_SYSCALL;
-    } else if (wait_status.ptrace_event() ||
-               wait_status.fatal_sig()) {
+    } else if (status.ptrace_event() && status.ptrace_event() != PTRACE_EVENT_SECCOMP) {
+    } else if (status.ptrace_event() ||
+               status.fatal_sig()) {
+      //ASSERT(this, 1 == 0);
+        syscall_state = NO_SYSCALL;
     } else {
-      LOG(debug) << "problematic wait_status " << wait_status << " after " << how_last_execution_resumed;
-      syscall_state = EXITING_SYSCALL;
-      //abort();
+      LOG(warn) << "problematic wait_status " <<status << " after " << how_last_execution_resumed;
+      if (how_last_execution_resumed == RESUME_SINGLESTEP ||
+          how_last_execution_resumed == RESUME_SYSEMU_SINGLESTEP) {
+        syscall_state = NO_SYSCALL;
+      } else {
+        //fprintf(stderr, "problematic wait_status %d\n", (int)status.get());
+        syscall_state = NO_SYSCALL;
+        //ASSERT(this, 0);
+      }
     }
   } else {
-    if (wait_status.is_syscall())
-      syscall_state = ENTERING_SYSCALL_PTRACE;
-    else if (wait_status.ptrace_event() == PTRACE_EVENT_SECCOMP)
+    if (status.is_syscall()) {
+      if (syscall_state != ENTERING_SYSCALL) {
+        LOG(warn) << "no PTRACE_EVENT_SECCOMP!";
+        syscall_state = ENTERING_SYSCALL_PTRACE;
+      } else {
+        syscall_state = ENTERING_SYSCALL_PTRACE;
+      }
+    } else if (status.ptrace_event() == PTRACE_EVENT_SECCOMP) {
       syscall_state = ENTERING_SYSCALL;
-    else
+    } else if (status.ptrace_event() == PTRACE_EVENT_FORK) {
+      syscall_state = ENTERING_SYSCALL_PTRACE;
+    } else
       syscall_state = NO_SYSCALL;
   }
 
   LOG(debug) << "syscall_state " << old_state << " -> " << syscall_state <<
-    " wait_status " << wait_status << " old IP " << address_of_last_execution_resume;
+    " wait_status " << status << " old IP " << address_of_last_execution_resume << " counts " << update_syscall_count << "/" << ptrace_cont_count << " ips " << syscall_state_registers.ip() << " -> " << r.ip();
+
+  ASSERT(this, update_syscall_count == ptrace_cont_count + 1);
+
+  syscall_state_registers = r;
+}
+
+void Task::update_syscall_state(SyscallState state)
+{
+  update_syscall_state(state, wait_status);
+}
+
+void Task::update_syscall_state(WaitStatus status)
+{
+  update_syscall_state(syscall_state, status);
 }
 
 void Task::update_syscall_state()
@@ -200,8 +243,6 @@ void Task::finish_emulated_syscall() {
     vm()->remove_breakpoint(ip, BKPT_INTERNAL);
   }
   set_regs(r);
-  wait_status = WaitStatus();
-  update_syscall_state();
 }
 
 void Task::dump(FILE* out) const {

@@ -409,9 +409,11 @@ void RecordSession::task_continue(const StepState& step_state) {
 
   TicksRequest ticks_request;
   ResumeRequest resume;
+  bool update_syscall_state = false;
   if (step_state.continue_type == CONTINUE_SYSCALL) {
     ticks_request = RESUME_NO_TICKS;
     resume = RESUME_SYSCALL;
+    update_syscall_state = true;
   } else {
     if (t->has_stashed_sig(PerfCounters::TIME_SLICE_SIGNAL)) {
       // timeslice signal already stashed, no point in generating another one
@@ -458,6 +460,8 @@ void RecordSession::task_continue(const StepState& step_state) {
     }
   }
   t->resume_execution(resume, RESUME_NONBLOCKING, ticks_request);
+  if (false && update_syscall_state)
+    t->update_syscall_state(WaitStatus::for_syscall(t));
 }
 
 /**
