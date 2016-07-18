@@ -207,6 +207,8 @@ public:
   void did_waitpid(WaitStatus status, siginfo_t* override_siginfo,
                    bool keep_lwpcb, SyscallState old_state);
 
+  void update_syscall_state(SyscallState old_state, WaitStatus status);
+  void update_syscall_state(WaitStatus status);
   void update_syscall_state(SyscallState old_state);
   void update_syscall_state();
 
@@ -952,6 +954,12 @@ protected:
   // True when a PTRACE_EXIT_EVENT has been observed in the wait_status
   // for this task.
   bool seen_ptrace_exit_event;
+
+  unsigned long update_syscall_count;
+  unsigned long ptrace_cont_count;
+  unsigned long extra_waitpids;
+
+  Registers syscall_state_registers;
 
   PropertyTable properties_;
 

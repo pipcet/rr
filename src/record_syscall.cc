@@ -1498,6 +1498,7 @@ static void prepare_ptrace_cont(RecordTask* tracee, int sig, int command) {
     // Continue the task since we didn't in enter_syscall
     tracee->resume_execution(RESUME_SYSCALL, RESUME_NONBLOCKING,
                              RESUME_NO_TICKS);
+    tracee->update_syscall_state(WaitStatus::for_syscall(tracee));
   }
 
   if (tracee->emulated_ptrace_queued_exit_stop) {
@@ -4173,6 +4174,7 @@ static void rec_process_syscall_arch(RecordTask* t,
             // Continue the task since we didn't in enter_syscall
             tracee->resume_execution(RESUME_SYSCALL, RESUME_NONBLOCKING,
                                      RESUME_NO_TICKS);
+            tracee->update_syscall_state(WaitStatus::for_syscall(tracee));
           }
           if (tracee->emulated_ptracer == t) {
             tracee->emulated_stop_pending = false;

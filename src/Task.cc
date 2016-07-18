@@ -1014,7 +1014,9 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
 #else
     ptrace_if_alive(how, nullptr, (void*)(uintptr_t)sig);
 #endif
+    ptrace_cont_count++;
   }
+  wait_status = WaitStatus();
 
   is_stopped = false;
   extra_registers_known = false;
@@ -1445,6 +1447,8 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
         registers.set_syscallno(syscallno);
         registers.undo_fake_call(this, 0);
         need_to_set_regs = true;
+        syscall_state = NO_SYSCALL;
+        //extra_waitpids = 1;
       }
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
