@@ -939,14 +939,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
                             bool lwpcb_set, bool stash_signals) {
   remote_code_ptr address_of_last_execution_resume2 = address_of_last_execution_resume;
 
-  if (extra_waitpids) {
-    extra_waitpids = 0;
-    do {
-      resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS, 0, false);
-      LOG(debug) << "delayed resume_execution resulted in " << wait_status;
-    } while (wait_status.ptrace_event());
-  }
-
   LOG(debug) << "(I) resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string())
@@ -1003,14 +995,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         }
       }
     }
-  }
-
-  if (extra_waitpids) {
-    extra_waitpids = 0;
-    do {
-      resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS, 0, false);
-      LOG(debug) << "delayed resume_execution resulted in " << wait_status;
-    } while (wait_status.ptrace_event());
   }
 
   LOG(debug) << "resuming execution of " << tid << " with "
