@@ -1452,7 +1452,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep_lwpcb, SyscallState old_state) {
   wait_status = status;
-  update_syscall_state(old_state);
 
   Ticks more_ticks = 0;
   if (rr_page_mapped() && !keep_lwpcb) {
@@ -1549,6 +1548,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     // If we couldn't read registers, don't fix them up!
     set_regs(registers);
   }
+  update_syscall_state(old_state);
 }
 
 bool Task::try_wait() {
