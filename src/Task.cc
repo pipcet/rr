@@ -611,6 +611,12 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       interrupted = true;
       break;
     }
+    if (regs().ip() == 0x70000105) {
+      LOG(debug) << "Interrupted syscall, resetting";
+      syscall_state = NO_SYSCALL;
+      interrupted = true;
+      break;
+    }
     if (is_ptrace_seccomp_event()) {
       LOG(debug) << "aborting set_lwpcb: seccomp event";
       interrupted = true;
@@ -640,8 +646,6 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       continue;
     }
     interrupted = true;
-    ASSERT(this, session().is_recording());
-    static_cast<RecordTask*>(this)->stash_sig();
     break;
   }
 
@@ -949,7 +953,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   // replay.
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
-    uintptr_t syscallno = regs().original_syscallno();
     /* XXX move this somewhere more sensible */
     lwp.init_buffer(AddressSpace::lwp_buffer_start(), AddressSpace::lwp_buffer_size());
     lwp.reset(tick_period == RESUME_UNLIMITED_TICKS
@@ -973,15 +976,11 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         lwp.read_lwp_xsave(true);
         LOG(debug) << "starting LWP";
         if (!set_lwpcb(stash_signals&&false)) {
-          LOG(debug) << "couldn't, resetting syscallno to " << syscallno;
-          registers.set_original_syscallno(syscallno);
-          set_regs(registers);
+          is_stopped = true;
           return true;
         }
       }
     }
-    registers.set_original_syscallno(syscallno);
-    set_regs(registers);
   }
 
   if (extra_waitpids) {
@@ -1473,17 +1472,8 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   if (status.ptrace_event() != PTRACE_EVENT_EXEC) {
     struct user_regs_struct ptrace_regs;
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
-      uintptr_t syscallno = registers.syscallno();
       registers.set_from_ptrace(ptrace_regs);
       did_read_regs = true;
-      if (registers.ip() == 0x70000105) {
-        LOG(debug) << "Interrupted syscall, resetting rax to " << syscallno;
-        registers.set_syscallno(syscallno);
-        registers.undo_fake_call(this, 0);
-        need_to_set_regs = true;
-        syscall_state = NO_SYSCALL;
-        //extra_waitpids = 1;
-      }
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
@@ -1552,6 +1542,9 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
 }
 
 bool Task::try_wait() {
+  if (is_stopped)
+    return true;
+
   int raw_status = 0;
   pid_t ret = waitpid(tid, &raw_status, WNOHANG | __WALL | WSTOPPED);
   ASSERT(this, 0 <= ret) << "waitpid(" << tid << ", NOHANG) failed with "
