@@ -458,8 +458,6 @@ void RecordSession::task_continue(const StepState& step_state) {
     }
   }
   t->resume_execution(resume, RESUME_NONBLOCKING, ticks_request);
-  if (false && update_syscall_state)
-    t->update_syscall_state(WaitStatus::for_syscall(t));
 }
 
 /**
