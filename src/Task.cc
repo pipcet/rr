@@ -929,14 +929,17 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << " at ip " << ip()
              << " (previously " << address_of_last_execution_resume2 << ")"
              << " ticks " << tick_period
-             << " syscall state " << syscall_state;
+             << " syscall state " << syscall_state << (lwpcb_set ? "" : "XXX");
 
   /* This is annoying. The SECCOMP/SYSCALL/SYSCALL rhythm no longer applies
    * when there is a bad syscall. */
-  if ((syscall_state == ENTERING_SYSCALL_PTRACE && registers.syscallno() >= 0 && registers.syscallno() <= 511) ||
+  if (wait_status.ptrace_event() == PTRACE_EVENT_EXEC) {
+  } else if ((syscall_state == ENTERING_SYSCALL_PTRACE && registers.syscallno() >= 0 && registers.syscallno() <= 511) ||
       syscall_state == ENTERING_SYSCALL ||
       is_at_syscall_instruction(this, ip())) {
     tick_period = RESUME_NO_TICKS;
+  } else if (syscall_state == ENTERING_SYSCALL_PTRACE) {
+    LOG(warn) << "hoping syscall " << registers.syscallno() << " is bad";
   }
 
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
