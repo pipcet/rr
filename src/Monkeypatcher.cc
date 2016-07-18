@@ -378,7 +378,7 @@ bool Monkeypatcher::try_patch_syscall(RecordTask* t) {
         }
       }
 
-      if (false && !found_potential_interfering_branch) {
+      if (!found_potential_interfering_branch) {
         // Get out of executing the current syscall before we patch it.
         t->exit_syscall_and_prepare_restart();
 
