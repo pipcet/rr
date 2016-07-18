@@ -149,7 +149,7 @@ void Task::update_syscall_state(SyscallState old_state, WaitStatus status)
     } else if (status.ptrace_event() ||
                status.fatal_sig()) {
       //ASSERT(this, 1 == 0);
-        syscall_state = NO_SYSCALL;
+      syscall_state = NO_SYSCALL;
     } else {
       LOG(warn) << "problematic wait_status " <<status << " after " << how_last_execution_resumed;
       if (how_last_execution_resumed == RESUME_SINGLESTEP ||
@@ -949,14 +949,15 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
 
   /* This is annoying. The SECCOMP/SYSCALL/SYSCALL rhythm no longer applies
    * when there is a bad syscall. */
-  if (wait_status.ptrace_event() == PTRACE_EVENT_EXEC) {
-  } else if ((syscall_state == ENTERING_SYSCALL_PTRACE && registers.syscallno() >= 0 && registers.syscallno() <= 511) ||
-      syscall_state == ENTERING_SYSCALL ||
-      is_at_syscall_instruction(this, ip())) {
-    tick_period = RESUME_NO_TICKS;
-  } else if (syscall_state == ENTERING_SYSCALL_PTRACE) {
-    LOG(warn) << "hoping syscall " << registers.syscallno() << " is bad";
-    tick_period = RESUME_NO_TICKS;
+  if (syscall_state == ENTERING_SYSCALL_PTRACE) {
+  }
+
+  if (syscall_state == ENTERING_SYSCALL_PTRACE ||
+      syscall_state == ENTERING_SYSCALL) {
+    if (uintptr_t(regs().original_syscallno()) > 511)
+      syscall_state = EXITING_SYSCALL;
+    else
+      tick_period = RESUME_NO_TICKS;
   }
 
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
