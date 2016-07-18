@@ -332,8 +332,6 @@ bool Monkeypatcher::try_patch_syscall(RecordTask* t) {
   }
 
   Registers r = t->regs();
-  if (t->is_in_rr_page())
-    return false;
   if (tried_to_patch_syscall_addresses.count(r.ip())) {
     return false;
   }
@@ -380,7 +378,7 @@ bool Monkeypatcher::try_patch_syscall(RecordTask* t) {
         }
       }
 
-      if (!found_potential_interfering_branch) {
+      if (false && !found_potential_interfering_branch) {
         // Get out of executing the current syscall before we patch it.
         t->exit_syscall_and_prepare_restart();
 
