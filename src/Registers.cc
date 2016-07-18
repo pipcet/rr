@@ -231,7 +231,26 @@ void Registers::print_register_file_arch(FILE* f, const char* formats[]) const {
   fprintf(f, "\n");
 }
 
-bool Registers::fake_call(Task *task, uintptr_t ip)
+template<>
+bool Registers::fake_call_arch<rr::X86Arch>(Task* task, uintptr_t ip)
+{
+  /* 128 for the red zone, 4 for the return IP, 4 for the CS */
+  u.x86regs.esp -= 128 + 8;
+
+  if (task->fallible_ptrace(PTRACE_POKEDATA, u.x86regs.esp + 4, reinterpret_cast<void*>(u.x86regs.xcs)) != 0)
+    return false;
+  if (task->fallible_ptrace(PTRACE_POKEDATA, u.x86regs.esp, reinterpret_cast<void*>(u.x86regs.eip)) != 0)
+    return false;
+
+  u.x86regs.eip = ip;
+
+  task->set_regs(*this);
+
+  return true;
+}
+
+template<>
+bool Registers::fake_call_arch<rr::X64Arch>(Task* task, uintptr_t ip)
 {
   /* 128 for the red zone, 8 for the return IP, 8 for the CS */
   u.x64regs.rsp -= 128 + 16;
@@ -249,8 +268,38 @@ bool Registers::fake_call(Task *task, uintptr_t ip)
   return true;
 }
 
-bool Registers::undo_fake_call(Task *task, intptr_t offset)
+bool Registers::fake_call(Task *task, uintptr_t ip)
 {
+  RR_ARCH_FUNCTION(fake_call_arch, arch(), task, ip);
+}
+
+template<>
+bool Registers::undo_fake_call_arch<rr::X64Arch>(Task *task, intptr_t offset)
+{
+  uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
+
+  u.x64regs.rsp += 128 + 16;
+
+  u.x64regs.rip = ip + offset;
+
+  return true;
+}
+
+template<>
+bool Registers::undo_fake_call_arch<rr::X86Arch>(Task *task, intptr_t offset)
+{
+  uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x86regs.esp, nullptr);
+
+  u.x86regs.esp += 128 + 8;
+
+  u.x86regs.eip = ip + offset;
+
+  return true;
+}
+
+bool Registers::undo_fake_call(Task* task, intptr_t offset)
+{
+  RR_ARCH_FUNCTION(undo_fake_call_arch, arch(), task, offset);
   uintptr_t ip = task->fallible_ptrace(PTRACE_PEEKDATA, u.x64regs.rsp, nullptr);
 
   u.x64regs.rsp += 128 + 16;

@@ -401,6 +401,12 @@ private:
 
   template <typename Arch> size_t total_registers_arch() const;
 
+  template <typename Arch>
+  bool fake_call_arch(Task* task, uintptr_t ip);
+
+  template <typename Arch>
+  bool undo_fake_call_arch(Task* task, intptr_t delta);
+
   SupportedArch arch_;
   union {
     rr::X86Arch::user_regs_struct x86regs;
