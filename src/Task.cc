@@ -605,16 +605,13 @@ void Task::move_ip_before_breakpoint() {
 
 bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
   bool interrupted = false;
+  bool restarted = false;
+ again:
   Registers r = regs();
   registers.fake_call(this, RR_PAGE_LWP_THUNK+6);
   while (is_in_rr_page_thunk() || (is_in_rr_page() && ip() != 0x70000000 && ip() != 0x70000002)) {
     if (resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true)) {
-      interrupted = true;
-      break;
-    }
-    if (regs().ip() == 0x70000105) {
-      LOG(debug) << "Interrupted syscall, resetting";
-      syscall_state = NO_SYSCALL;
+      LOG(debug) << "aborting set_lwpcb: recursion";
       interrupted = true;
       break;
     }
@@ -628,14 +625,36 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       interrupted = true;
       break;
     }
+    if (regs().ip() == 0x70000105) {
+      LOG(debug) << "Interrupted syscall, resetting";
+      syscall_state = NO_SYSCALL;
+      r.set_syscallno(registers.syscallno());
+      if (!restarted) {
+        r.set_ip(r.ip() - 2);
+        restarted = true;
+      }
+      set_regs(r);
+      if (stop_sig() == SIGTRAP) {
+        TrapReasons reasons = compute_trap_reasons();
+
+        if (reasons.breakpoint || reasons.watchpoint || !reasons.singlestep) {
+          interrupted = true;
+          break;
+        }
+      } else if (stop_sig()) {
+        interrupted = true;
+        break;
+      }
+      goto again;
+    }
+    LOG(debug) << "stopped with " << wait_status;
     if (!stop_sig()) {
-      LOG(debug) << "stopped with " << wait_status;
       continue;
     }
     if (stop_sig() == SIGTRAP) {
       TrapReasons reasons = compute_trap_reasons();
 
-      if (!reasons.breakpoint && !reasons.watchpoint) {
+      if (!reasons.breakpoint && !reasons.watchpoint && reasons.singlestep) {
         continue;
       }
     }
@@ -923,7 +942,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   if (extra_waitpids) {
     extra_waitpids = 0;
     do {
-      resume_execution(RESUME_CONT, RESUME_WAIT, RESUME_NO_TICKS, 0, false);
+      resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS, 0, false);
       LOG(debug) << "delayed resume_execution resulted in " << wait_status;
     } while (wait_status.ptrace_event());
   }
