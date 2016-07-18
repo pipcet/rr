@@ -916,7 +916,10 @@ static void preinject_signal(RecordTask* t) {
      */
     while (true) {
       auto old_ip = t->ip();
-      t->resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS);
+      t->resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS,
+                          0, false, false);
+      if (!t->stop_sig())
+        continue;
       ASSERT(t, old_ip == t->ip());
       if (t->status().group_stop()) {
         /* Sending SIGCONT (4.4.3-300.fc23.x86_64) triggers this. Unclear why
