@@ -1262,6 +1262,9 @@ static struct timeval to_timeval(double t) {
 }
 
 void Task::wait(double interrupt_after_elapsed, bool keep_lwpcb) {
+  if (is_stopped)
+    return;
+
   LOG(debug) << "going into blocking waitpid(" << tid << ") ...";
   ASSERT(this, !unstable) << "Don't wait for unstable tasks";
   ASSERT(this, session().is_recording() || interrupt_after_elapsed == 0);
