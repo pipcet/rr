@@ -1045,8 +1045,8 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
 #else
     ptrace_if_alive(how, nullptr, (void*)(uintptr_t)sig);
 #endif
-    ptrace_cont_count++;
   }
+  ptrace_cont_count++;
   wait_status = WaitStatus();
 
   is_stopped = false;
