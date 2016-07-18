@@ -14,20 +14,20 @@
  * 0x2000000 - LwpCont: continuous mode sampling. This is required(?!).
  */
 
-#define LWP_FLAGS_THRESHOLD_INT  0x80000000L
+#define LWP_FLAGS_THRESHOLD_INT  0x80000000LL
 #define LWP_FLAGS_BRANCHES       (1LL<<(LWP_EVENT_BRANCHES+1))
 
-#define LWP_EVENT_BRANCHES                2L
+#define LWP_EVENT_BRANCHES                2LL
 
-#define LWP_FILTER_NO_RELATIVE_BRANCHES  0x20000000L
-#define LWP_FILTER_NO_ABSOLUTE_BRANCHES  0x08000000L
+#define LWP_FILTER_NO_RELATIVE_BRANCHES  0x20000000LL
+#define LWP_FILTER_NO_ABSOLUTE_BRANCHES  0x08000000LL
 
 #define LWP_FLAGS       (LWP_FLAGS_THRESHOLD_INT|LWP_FLAGS_BRANCHES)
 #define LWP_EVENT       LWP_EVENT_BRANCHES
 #define LWP_FILTERS     (LWP_FILTER_NO_ABSOLUTE_BRANCHES|LWP_FILTER_NO_RELATIVE_BRANCHES)
-#define LWP_MAX_PERIOD            0xffffffL
-#define LWP_INTERVAL             0x1ffffffL
-#define LWP_SIGN        0xffffffffff000000L
+#define LWP_MAX_PERIOD            0xffffffLL
+#define LWP_INTERVAL             0x1ffffffLL
+#define LWP_SIGN        0xffffffffff000000LL
 
 struct perf_event_attr;
 

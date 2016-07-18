@@ -76,15 +76,28 @@ bool LWP::init_buffer(remote_ptr<void> buffer, size_t buffer_size)
 
 bool LWP::write_lwpcb(remote_ptr<struct lwpcb> dest_lwp)
 {
-  remote_ptr<long> dest = remote_ptr<long>(dest_lwp.as_int());
-  long *src = (long *)&lwpcb;
-  assert(task);
-  assert(dest);
+  if (task->arch() == rr::SupportedArch::x86_64) {
+    remote_ptr<long> dest = remote_ptr<long>(dest_lwp.as_int());
+    long *src = (long *)&lwpcb;
+    assert(task);
+    assert(dest);
 
-  unsigned int i;
-  for (i = 0; i < (sizeof(lwpcb) + 7) / 8; i++) {
-    if (task->fallible_ptrace(PTRACE_POKEDATA, dest + i, reinterpret_cast<void*>(src[i])) != 0)
-      return false;
+    unsigned int i;
+    for (i = 0; i < (sizeof(lwpcb) + 7) / 8; i++) {
+      if (task->fallible_ptrace(PTRACE_POKEDATA, dest + i, reinterpret_cast<void*>(src[i])) != 0)
+        return false;
+    }
+  } else if (task->arch() == rr::SupportedArch::x86) {
+    remote_ptr<int> dest = remote_ptr<int>(dest_lwp.as_int());
+    int *src = (int *)&lwpcb;
+    assert(task);
+    assert(dest);
+
+    unsigned int i;
+    for (i = 0; i < (sizeof(lwpcb) + 3) / 4; i++) {
+      if (task->fallible_ptrace(PTRACE_POKEDATA, dest + i, reinterpret_cast<void*>(src[i])) != 0)
+        return false;
+    }
   }
 
   return true;
