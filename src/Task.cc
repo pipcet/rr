@@ -80,6 +80,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       registers(a),
       how_last_execution_resumed(RESUME_CONT),
       is_stopped(false),
+      stopped_prematurely(false),
       detected_unexpected_exit(false),
       extra_registers(a),
       extra_registers_known(false),
@@ -944,6 +945,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
     tick_period = RESUME_NO_TICKS;
   } else if (syscall_state == ENTERING_SYSCALL_PTRACE) {
     LOG(warn) << "hoping syscall " << registers.syscallno() << " is bad";
+    tick_period = RESUME_NO_TICKS;
   }
 
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
@@ -977,6 +979,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         LOG(debug) << "starting LWP";
         if (!set_lwpcb(stash_signals&&false)) {
           is_stopped = true;
+          stopped_prematurely = (wait_how == RESUME_NONBLOCKING);
           return true;
         }
       }
@@ -1049,6 +1052,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   wait_status = WaitStatus();
 
   is_stopped = false;
+  stopped_prematurely = false;
   extra_registers_known = false;
   if (RESUME_WAIT == wait_how) {
     wait(0, lwpcb_set);
@@ -1261,8 +1265,10 @@ static struct timeval to_timeval(double t) {
 }
 
 void Task::wait(double interrupt_after_elapsed, bool keep_lwpcb) {
-  if (is_stopped)
+  if (is_stopped) {
+    ASSERT(this, stopped_prematurely);
     return;
+  }
 
   LOG(debug) << "going into blocking waitpid(" << tid << ") ...";
   ASSERT(this, !unstable) << "Don't wait for unstable tasks";
@@ -1493,6 +1499,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   }
 
   is_stopped = true;
+  stopped_prematurely = false;
   if (did_read_regs)
     LOG(debug) << "IP " << ip();
   if (ptrace_event() == PTRACE_EVENT_EXIT) {

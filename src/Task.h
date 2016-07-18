@@ -483,7 +483,7 @@ public:
   /**
    * Return true when the task is running, false if it's stopped.
    */
-  bool is_running() const { return !is_stopped; }
+  bool is_running() const { return !is_stopped || stopped_prematurely; }
 
   /**
    * Return the status of this as of the last successful wait()/try_wait() call.
@@ -928,6 +928,7 @@ protected:
   // True when we know via waitpid() that the task is stopped and we haven't
   // resumed it.
   bool is_stopped;
+  bool stopped_prematurely;
   // True when we consumed a PTRACE_EVENT_EXIT that was about to race with
   // a resume_execution, that was issued while stopped (i.e. SIGKILL).
   bool detected_unexpected_exit;
