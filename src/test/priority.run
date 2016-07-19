@@ -1,4 +1,5 @@
 source `dirname $0`/util.sh
+skip_if_reniced
 renice -n 1 $$ && record $TESTNAME
 renice -n 2 $$ && replay
 check 'EXIT-SUCCESS'
