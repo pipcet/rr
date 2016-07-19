@@ -132,42 +132,42 @@ bool LWP::read_lwp_xsave(bool disable_lwp)
 
 bool LWP::lwp_xsave_to_lwpcb()
 {
-  if (xsave.flags) {
-    /* Flags should be unchanged.
-     *
-     * Family 15h revision 00h-0fh: flags 0x80000008 -> 0x00000008
-     */
-    if (lwpcb.flags != xsave.flags) {
-      LOG(info) << "LWP flags changed from " << lwpcb.flags << " to "
-                << xsave.flags << "\n";
-      if (lwpcb.flags == 0x80000008 && xsave.flags == 8) {
-        LOG(info) << "this is a known CPU issue";
-      } else {
-        lwpcb.flags = xsave.flags;
-      }
-    }
-    assert(lwpcb.buffer_size == xsave.buffer_size);
-    assert(lwpcb.buffer_base == xsave.buffer_base);
-    /* Family 15h revision 00h-0fh: filters reset to 0x38000000 if flags = 0
-     * Family 15h revision 30h-3fh: filters reset to 0x38000000 if flags = 0
-     */
-    if (lwpcb.filters != xsave.filters) {
-      LOG(info) << "LWP filters changed from " << lwpcb.filters << " to "
-                << xsave.filters << "\n";
-    }
+  ASSERT(task, xsave.flags != 0);
 
-    lwpcb.buffer_size = xsave.buffer_size;
-    lwpcb.buffer_base = xsave.buffer_base;
-    if (lwpcb.buffer_head_offset != xsave.buffer_head_offset) {
-      LOG(debug) << "LWP buffer head offset changed from " << lwpcb.buffer_head_offset << " to " << xsave.buffer_head_offset;
+  /* Flags should be unchanged.
+   *
+   * Family 15h revision 00h-0fh: flags 0x80000008 -> 0x00000008
+   */
+  if (lwpcb.flags != xsave.flags) {
+    LOG(info) << "LWP flags changed from " << lwpcb.flags << " to "
+              << xsave.flags << "\n";
+    if (lwpcb.flags == 0x80000008 && xsave.flags == 8) {
+      LOG(info) << "this is a known CPU issue";
+    } else {
+      lwpcb.flags = xsave.flags;
     }
-    lwpcb.buffer_head_offset = xsave.buffer_head_offset;
-    lwpcb.filters = xsave.filters;
-    if (lwpcb.event[LWP_EVENT].counter != xsave.event_counter[LWP_EVENT]) {
-      LOG(debug) << "LWP counter changed from " << lwpcb.event[LWP_EVENT].counter << " to " << xsave.event_counter[LWP_EVENT];
-    }
-    lwpcb.event[LWP_EVENT].counter = xsave.event_counter[LWP_EVENT];
   }
+  assert(lwpcb.buffer_size == xsave.buffer_size);
+  assert(lwpcb.buffer_base == xsave.buffer_base);
+  /* Family 15h revision 00h-0fh: filters reset to 0x38000000 if flags = 0
+   * Family 15h revision 30h-3fh: filters reset to 0x38000000 if flags = 0
+   */
+  if (lwpcb.filters != xsave.filters) {
+    LOG(info) << "LWP filters changed from " << lwpcb.filters << " to "
+              << xsave.filters << "\n";
+  }
+
+  lwpcb.buffer_size = xsave.buffer_size;
+  lwpcb.buffer_base = xsave.buffer_base;
+  if (lwpcb.buffer_head_offset != xsave.buffer_head_offset) {
+    LOG(debug) << "LWP buffer head offset changed from " << lwpcb.buffer_head_offset << " to " << xsave.buffer_head_offset;
+  }
+  lwpcb.buffer_head_offset = xsave.buffer_head_offset;
+  lwpcb.filters = xsave.filters;
+  if (lwpcb.event[LWP_EVENT].counter != xsave.event_counter[LWP_EVENT]) {
+    LOG(debug) << "LWP counter changed from " << lwpcb.event[LWP_EVENT].counter << " to " << xsave.event_counter[LWP_EVENT];
+  }
+  lwpcb.event[LWP_EVENT].counter = xsave.event_counter[LWP_EVENT];
 
   return true;
 }
