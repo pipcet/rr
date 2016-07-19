@@ -190,6 +190,18 @@ function skip_if_syscall_buf {
     fi
 }
 
+function skip_if_amd {
+    echo NOTE: Skipping "'$TESTNAME'" because this is an AMD CPU
+    exit 0
+}
+
+function skip_if_reniced {
+    if !renice -n 0 $$; then
+        echo NOTE: Skipping "'$TESTNAME'" because of the current nice level.
+        exit 0
+    fi
+}
+
 function just_record { exe=$1; exeargs=$2;
     _RR_TRACE_DIR="$workdir" \
         rr $GLOBAL_OPTIONS record $LIB_ARG $RECORD_ARGS $exe $exeargs 1> record.out 2> record.err
