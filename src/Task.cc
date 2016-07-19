@@ -1462,20 +1462,18 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
 
   Ticks more_ticks = 0;
   if (rr_page_mapped() && !keep_lwpcb) {
-    if (lwp.read_lwp_xsave(true)) {
+    bool disable_lwp = (old_state != ENTERING_SYSCALL_PTRACE);
+    if (lwp.read_lwp_xsave(disable_lwp)) {
       lwp.lwp_xsave_to_lwpcb();
       more_ticks = lwp.read_ticks();
     } else {
       LOG(debug) << "LWP disabled";
     }
-    // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
-    // whatever they pick up something spurious later.
-    lwp.stop();
+    if (disable_lwp)
+      lwp.stop();
   }
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
-  if (!keep_lwpcb)
-    lwp.stop();
 
   LOG(debug) << "  ticks = " << (ticks - more_ticks) << " + " << more_ticks;
   LOG(debug) << "  (refreshing register cache)";
