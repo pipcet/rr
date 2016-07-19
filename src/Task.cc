@@ -609,7 +609,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
  again:
   Registers r = regs();
   registers.fake_call(this, RR_PAGE_LWP_THUNK+6);
-  while (is_in_rr_page_thunk() || (is_in_rr_page() && ip() != 0x70000000 && ip() != 0x70000002)) {
+  while (is_in_rr_page_thunk()) {
     if (resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true)) {
       LOG(debug) << "aborting set_lwpcb: recursion";
       interrupted = true;
@@ -1452,6 +1452,12 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
 }
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep_lwpcb, SyscallState old_state) {
+  if (is_stopped) {
+    ASSERT(this, stopped_prematurely || status.ptrace_event() == PTRACE_EVENT_EXIT);
+    if (stopped_prematurely)
+      return;
+  }
+
   wait_status = status;
 
   Ticks more_ticks = 0;
@@ -1549,7 +1555,8 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     // If we couldn't read registers, don't fix them up!
     set_regs(registers);
   }
-  update_syscall_state(old_state);
+  if (!seen_ptrace_exit_event)
+    update_syscall_state(old_state);
 }
 
 bool Task::try_wait() {
