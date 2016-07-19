@@ -59,6 +59,8 @@
   RR_PAGE_SYSCALL_ADDR(7)
 
 #define RR_PAGE_LWP_THUNK (RR_PAGE_ADDR + RR_PAGE_SYSCALL_STUB_SIZE * 8)
+#define RR_PAGE_LWP_THUNK_ENTRY (RR_PAGE_LWP_THUNK + 1)
+#define RR_PAGE_LWP_THUNK_END (RR_PAGE_LWP_THUNK_ENTRY + 6)
 #define RR_PAGE_FF_BYTES (RR_PAGE_LWP_THUNK + 64)
 
 /* "Magic" (rr-implemented) syscalls that we use to initialize the

@@ -608,8 +608,8 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
   bool restarted = false;
  again:
   Registers r = regs();
-  registers.fake_call(this, RR_PAGE_LWP_THUNK+6);
-  while (is_in_rr_page_thunk()) {
+  registers.setup_llwpcb(this, RR_PAGE_LWP_THUNK_ENTRY, 0x70001000);
+  while (true) {
     if (resume_execution(RESUME_SINGLESTEP, RESUME_WAIT, RESUME_NO_TICKS, 0, true)) {
       LOG(debug) << "aborting set_lwpcb: recursion";
       interrupted = true;
@@ -625,7 +625,8 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       interrupted = true;
       break;
     }
-    if (regs().ip() == 0x70000105) {
+    if (regs().ip() == RR_PAGE_LWP_THUNK) {
+    interrupted_syscall:
       LOG(debug) << "Interrupted syscall, resetting";
       syscall_state = NO_SYSCALL;
       r.set_syscallno(registers.syscallno());
@@ -633,7 +634,6 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         r.set_ip(r.ip() - 2);
         restarted = true;
       }
-      set_regs(r);
       if (stop_sig() == SIGTRAP) {
         TrapReasons reasons = compute_trap_reasons();
 
@@ -645,9 +645,14 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         interrupted = true;
         break;
       }
+      set_regs(r);
       goto again;
     }
     LOG(debug) << "stopped with " << wait_status;
+    if (regs().ip() == RR_PAGE_LWP_THUNK_END) {
+      break;
+    }
+    LOG(debug) << "stopped with " << wait_status << " at IP " << ip();
     if (!stop_sig()) {
       continue;
     }
@@ -657,6 +662,9 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       if (!reasons.breakpoint && !reasons.watchpoint && reasons.singlestep) {
         continue;
       }
+
+      if (reasons.breakpoint)
+        goto interrupted_syscall;
     }
     if (ReplaySession::is_ignored_signal(stop_sig()) &&
         session().is_replaying())

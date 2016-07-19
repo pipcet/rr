@@ -70,6 +70,7 @@ public:
    * stack space for the red zone. */
   bool fake_call(Task* task, uintptr_t ip);
   bool undo_fake_call(Task* task, intptr_t delta);
+  bool setup_llwpcb(Task* task, uintptr_t ip, uintptr_t lwpcb);
 
   /**
    * Copy a user_regs_struct into these Registers. If the tracee architecture
@@ -407,6 +408,8 @@ private:
   template <typename Arch>
   bool undo_fake_call_arch(Task* task, intptr_t delta);
 
+  template <typename Arch>
+  bool setup_llwpcb_arch(Task* task, uintptr_t ip, uintptr_t lwpcb);
   SupportedArch arch_;
   union {
     rr::X86Arch::user_regs_struct x86regs;
