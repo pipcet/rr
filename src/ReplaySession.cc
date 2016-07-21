@@ -297,7 +297,8 @@ Completion ReplaySession::cont_syscall_boundary(
   } else {
     ResumeRequest resume_how =
         constraints.is_singlestep() ? RESUME_SYSEMU_SINGLESTEP : RESUME_SYSEMU;
-    t->resume_execution(resume_how, RESUME_WAIT, ticks_request);
+    if (t->resume_execution(resume_how, RESUME_WAIT, ticks_request))
+      return INCOMPLETE;
   }
 
   if (t->stop_sig() == PerfCounters::TIME_SLICE_SIGNAL) {
