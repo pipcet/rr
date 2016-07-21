@@ -272,10 +272,10 @@ bool Registers::fake_call_arch<rr::X64Arch>(Task* task, uintptr_t ip)
 }
 
 template<>
-bool Registers::setup_llwpcb_arch<rr::X86Arch>(Task* task __attribute__((unused)), uintptr_t ip, uintptr_t lwpcb)
+bool Registers::setup_llwpcb_arch<rr::X86Arch>(Task* task __attribute__((unused)), uintptr_t ip, uintptr_t lwpcb __attribute__((unused)))
 {
   u.x86regs.eip = ip;
-  u.x86regs.eax = lwpcb;
+  //u.x86regs.eax = lwpcb;
 
   task->set_regs(*this);
 
@@ -283,10 +283,10 @@ bool Registers::setup_llwpcb_arch<rr::X86Arch>(Task* task __attribute__((unused)
 }
 
 template<>
-bool Registers::setup_llwpcb_arch<rr::X64Arch>(Task* task __attribute__((unused)), uintptr_t ip, uintptr_t lwpcb)
+bool Registers::setup_llwpcb_arch<rr::X64Arch>(Task* task __attribute__((unused)), uintptr_t ip, uintptr_t lwpcb __attribute__((unused)))
 {
   u.x64regs.rip = ip;
-  u.x64regs.rax = lwpcb;
+  //u.x64regs.rax = lwpcb;
 
   task->set_regs(*this);
 

@@ -36,8 +36,11 @@ def write_rr_page(f, is_64, is_replay):
         thunk_bytes = bytearray([
             0xcc,                          # int3
             0x90,                          # nop
+            0x90,                          # nop
+            0x90,                          # nop
+            0xb8, 0x00, 0x10, 0x00, 0x70,  # mov $0x70001000,%eax
             0x8f, 0xe9, 0xf8, 0x12, 0xc0,  # llwpcb %rax
-            0xcc,                          # int3
+            0x90,                          # int3
             0xff, 0xff, 0xff, 0xff,
             0xff, 0xff, 0xff, 0xff,
             0xff, 0xff, 0xff, 0xff,
@@ -98,8 +101,11 @@ def write_rr_page(f, is_64, is_replay):
         thunk_bytes = bytearray([
             0xcc,                          # int3
             0x90,
+            0x90,
+            0x90,
+            0xb8, 0x00, 0x10, 0x00, 0x70,  # mov $0x70001000,%eax
             0x8f, 0xe9, 0x78, 0x12, 0xc0,  # llwpcb %eax
-            0xcc,                          # int3
+            0x90,                          # int3
             0xff, 0xff, 0xff, 0xff,
             0xff, 0xff, 0xff, 0xff,
             0xff, 0xff, 0xff, 0xff,
