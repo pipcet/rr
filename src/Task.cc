@@ -211,7 +211,7 @@ void Task::finish_emulated_syscall() {
   Registers r = regs();
   remote_code_ptr ip = r.ip();
   bool known_idempotent_insn_after_syscall =
-    is_in_traced_syscall();
+    is_in_traced_syscall() || is_in_untraced_syscall();
 
   // We're about to single-step the tracee at its $ip just past
   // the syscall insn, then back up the $ip to where it started.
