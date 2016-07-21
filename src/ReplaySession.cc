@@ -406,7 +406,7 @@ Completion ReplaySession::enter_syscall(ReplayTask* t,
     } else {
       // If we use the breakpoint optimization, we must get a SIGTRAP before
       // reaching a syscall, so cont_syscall_boundary must return INCOMPLETE.
-      ASSERT(t, !syscall_bp_vm);
+      ASSERT(t, !syscall_bp_vm) << syscall_bp_addr;
       t->validate_regs();
       t->finish_emulated_syscall();
     }
