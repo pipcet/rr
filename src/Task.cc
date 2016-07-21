@@ -627,7 +627,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
     }
     if (regs().ip() == RR_PAGE_LWP_THUNK) {
     interrupted_syscall:
-      LOG(debug) << "Interrupted syscall, resetting";
+      LOG(debug) << "Interrupted syscall, resetting, " << registers.syscallno();
       syscall_state = NO_SYSCALL;
       r.set_syscallno(registers.syscallno());
       if (stop_sig() == SIGTRAP) {
