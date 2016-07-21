@@ -1471,6 +1471,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   Ticks more_ticks = 0;
   if (rr_page_mapped() && !keep_lwpcb) {
     bool disable_lwp = (old_state != ENTERING_SYSCALL_PTRACE);
+    lwp.init_buffer(AddressSpace::lwp_buffer_start(), AddressSpace::lwp_buffer_size());
     if (lwp.read_lwp_xsave(disable_lwp)) {
       lwp.lwp_xsave_to_lwpcb();
       more_ticks = lwp.read_ticks();
