@@ -988,9 +988,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   if (tick_period != RESUME_NO_TICKS) {
     /* XXX move this somewhere more sensible */
     lwp.init_buffer(AddressSpace::lwp_buffer_start(), AddressSpace::lwp_buffer_size());
-    lwp.reset(tick_period == RESUME_UNLIMITED_TICKS
-                  ? 0xffffff
-                  : max<Ticks>(1, tick_period));
     // Ensure preload_globals.thread_locals_initialized is up to date. Avoid
     // unnecessary writes by caching last written value per-AddressSpace.
     if (preload_globals) {
@@ -1005,8 +1002,12 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
       }
     }
     if (!lwpcb_set) {
+      lwp.reset(tick_period == RESUME_UNLIMITED_TICKS
+                ? 0xffffff
+                : max<Ticks>(1, tick_period));
       if (lwp.write_lwpcb(AddressSpace::lwpcb_start())) {
-        lwp.read_lwp_xsave(true);
+        lwp.read_lwp_xsave(false);
+        lwp.read_ticks();
         LOG(debug) << "starting LWP";
         if (!set_lwpcb(stash_signals&&false)) {
           is_stopped = true;
