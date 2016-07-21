@@ -237,11 +237,15 @@ static ScopedFd start_ticks(pid_t tid, int group_fd, struct perf_event_attr* att
 static struct perf_event_attr ticks_attr;
 void LWP::reset(Ticks ticks_period)
 {
+  stop();
   if (ticks_period > LWP_MAX_PERIOD)
     ticks_period = LWP_MAX_PERIOD;
   assert(ticks_period >= 0);
   assert(ticks_period <= LWP_MAX_PERIOD);
   assert(ticks_period <= LWP_INTERVAL);
+
+  if (read_lwp_xsave(true))
+    lwp_xsave_to_lwpcb();
 
   struct perf_event_attr attr = rr::ticks_attr;
   fd_ticks = start_ticks(tid, -1, &attr);
