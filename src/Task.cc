@@ -630,10 +630,6 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       LOG(debug) << "Interrupted syscall, resetting";
       syscall_state = NO_SYSCALL;
       r.set_syscallno(registers.syscallno());
-      if (!restarted) {
-        r.set_ip(r.ip() - 2);
-        restarted = true;
-      }
       if (stop_sig() == SIGTRAP) {
         TrapReasons reasons = compute_trap_reasons();
 
@@ -644,6 +640,10 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       } else if (stop_sig()) {
         interrupted = true;
         break;
+      }
+      if (!restarted) {
+        r.set_ip(r.ip() - ((arch() == x86_64) ? 2 : 2));
+        restarted = true;
       }
       set_regs(r);
       goto again;
