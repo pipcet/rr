@@ -641,7 +641,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       if (stop_sig() == SIGTRAP) {
         TrapReasons reasons = compute_trap_reasons();
 
-        if (reasons.breakpoint || reasons.watchpoint || !reasons.singlestep) {
+        if (!reasons.breakpoint && !reasons.singlestep) {
           interrupted = true;
           break;
         }
@@ -667,12 +667,14 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
     if (stop_sig() == SIGTRAP) {
       TrapReasons reasons = compute_trap_reasons();
 
-      if (!reasons.breakpoint && !reasons.watchpoint && reasons.singlestep) {
-        continue;
-      }
-
-      if (reasons.breakpoint)
+      if (reasons.breakpoint && (regs().ip() == RR_PAGE_LWP_THUNK ||
+                                 regs().ip() == RR_PAGE_LWP_THUNK+1 ||
+                                 regs().ip() == RR_PAGE_LWP_THUNK+2))
         goto interrupted_syscall;
+      else if (reasons.breakpoint)
+        {}
+      else if (reasons.singlestep)
+        continue;
     }
     if (ReplaySession::is_ignored_signal(stop_sig()) &&
         session().is_replaying())
