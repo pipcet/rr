@@ -171,6 +171,8 @@ void Task::update_syscall_state(SyscallState old_state, WaitStatus status)
       }
     } else if (status.ptrace_event() == PTRACE_EVENT_SECCOMP) {
       syscall_state = ENTERING_SYSCALL;
+      if (how_last_execution_resumed == RESUME_CONT)
+        syscall_state = NO_SYSCALL;
     } else if (status.ptrace_event() == PTRACE_EVENT_FORK) {
       syscall_state = ENTERING_SYSCALL_PTRACE;
     } else
