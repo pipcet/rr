@@ -146,8 +146,9 @@ void Task::update_syscall_state(SyscallState old_state, WaitStatus status)
     if (status.is_syscall() || status.get() == 0) {
       syscall_state = EXITING_SYSCALL;
     } else if (status.ptrace_event() && status.ptrace_event() != PTRACE_EVENT_SECCOMP) {
-    } else if (status.ptrace_event() ||
-               status.fatal_sig()) {
+    } else if (status.ptrace_event()) {
+      syscall_state = ENTERING_SYSCALL;
+    } else if (status.fatal_sig()) {
       //ASSERT(this, 1 == 0);
       syscall_state = NO_SYSCALL;
     } else {
