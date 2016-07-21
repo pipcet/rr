@@ -317,6 +317,7 @@ Completion ReplaySession::cont_syscall_boundary(
   ASSERT(t, !t->stop_sig()) << "Replay got unrecorded signal " << t->stop_sig()
                             << " (" << signal_name(t->stop_sig()) << ")";
 
+  LOG(debug) << "IP " << t->ip();
   auto type = AddressSpace::rr_page_syscall_from_exit_point(t->ip());
   if (type && type->traced == AddressSpace::UNTRACED &&
       type->enabled == AddressSpace::REPLAY_ONLY) {
