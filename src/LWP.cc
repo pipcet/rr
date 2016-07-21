@@ -292,7 +292,7 @@ Ticks LWP::read_ticks_nondestructively()
       counter_value |= LWP_SIGN;
     assert(counter_value >= -2048);
     long diff = last_ticks_period - counter_value;
-    assert(diff >= 0);
+    ASSERT(task, diff >= 0) << " bad diff " << diff;
     long ret = saved_ticks;
     ret += diff;
     return ret;
