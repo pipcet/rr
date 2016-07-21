@@ -627,7 +627,13 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       interrupted = true;
       break;
     }
-    if (regs().ip() == RR_PAGE_LWP_THUNK) {
+    if (status().group_stop()) {
+      /* SIGCONT. See comment in RecordSession.cc. */
+      continue;
+    }
+    if (regs().ip() == RR_PAGE_LWP_THUNK ||
+        regs().ip() == RR_PAGE_LWP_THUNK+1 ||
+        regs().ip() == RR_PAGE_LWP_THUNK+2) {
     interrupted_syscall:
       LOG(debug) << "Interrupted syscall, resetting, " << registers.syscallno();
       syscall_state = NO_SYSCALL;
