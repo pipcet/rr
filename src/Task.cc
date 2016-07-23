@@ -880,6 +880,7 @@ TrapReasons Task::compute_trap_reasons() {
         as->is_breakpoint_instruction(this, address_of_last_execution_resume);
     }
   }
+  LOG(debug) << "c_t_r at " << ip << "/" << address_of_last_execution_resume << ": " << reasons.singlestep << reasons.breakpoint << reasons.watchpoint;
   return reasons;
 }
 
