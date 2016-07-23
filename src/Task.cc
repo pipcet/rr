@@ -175,6 +175,7 @@ void Task::finish_emulated_syscall() {
     vm()->remove_breakpoint(ip, BKPT_INTERNAL);
   }
   set_regs(r);
+  wait_status = WaitStatus();
 }
 
 void Task::dump(FILE* out) const {
@@ -623,10 +624,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
 
 void Task::advance_syscall() {
   while (true) {
-    LOG(debug) << "advance_syscall";
-    if (resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS))
-      break;
-    LOG(debug) << "advance_syscall: " << wait_status;
+    resume_execution(RESUME_SYSCALL, RESUME_WAIT, RESUME_NO_TICKS);
     if (is_ptrace_seccomp_event()) {
       continue;
     }
@@ -657,7 +655,6 @@ void Task::exit_syscall_and_prepare_restart() {
   r.set_original_syscallno(-1);
   r.set_syscallno(syscallno);
   r.set_ip(r.ip() - syscall_instruction_length(r.arch()));
-
   set_regs(r);
 }
 
@@ -870,12 +867,11 @@ TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
     pending_siginfo.si_addr = (void *)((char *)ip.register_value() - 1);
-#if 0
     if (reasons.breakpoint) {
-      reasons.breakpoint =
-        as->is_breakpoint_instruction(this, address_of_last_execution_resume);
+      ASSERT(this, as->is_breakpoint_instruction(this, ip_at_breakpoint))
+          << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
+          << si;
     }
-#endif
   }
   LOG(debug) << "c_t_r at " << ip << "/" << address_of_last_execution_resume << ": " << reasons.singlestep << reasons.breakpoint << reasons.watchpoint;
   return reasons;
@@ -975,8 +971,6 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   } else {
     ptrace_if_alive(how, nullptr, (void*)(uintptr_t)sig);
   }
-  ptrace_cont_count++;
-  wait_status = WaitStatus();
 
   is_stopped = false;
   stopped_prematurely = false;
@@ -1421,7 +1415,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
-      wait_status = status;
     }
   }
   if (status.stop_sig()) {
@@ -1431,7 +1424,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
       if (!ptrace_if_alive(PTRACE_GETSIGINFO, nullptr, &pending_siginfo)) {
         LOG(debug) << "Unexpected process death for " << tid;
         status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
-        wait_status = status;
       }
     }
   }
@@ -1440,6 +1432,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   stopped_prematurely = false;
   if (did_read_regs)
     LOG(debug) << "IP " << ip();
+  wait_status = status;
   if (ptrace_event() == PTRACE_EVENT_EXIT) {
     seen_ptrace_exit_event = true;
   }
