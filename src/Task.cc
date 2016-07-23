@@ -890,13 +890,13 @@ static const Property<bool, AddressSpace> thread_locals_initialized_property;
 bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
                             TicksRequest tick_period, int sig,
                             bool lwpcb_set, bool stash_signals) {
-  remote_code_ptr address_of_last_execution_resume2 = address_of_last_execution_resume;
+  remote_code_ptr resume_ip = ip();
 
   LOG(debug) << "(I) resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string())
              << " at ip " << ip()
-             << " (previously " << address_of_last_execution_resume2 << ")"
+             << " (previously " << address_of_last_execution_resume << ")"
              << " ticks " << tick_period;
 
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
@@ -943,7 +943,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << (sig ? string(", signal ") + signal_name(sig) : string())
              << " at ip " << ip()
              << " which" << ((is_in_traced_syscall() || is_in_untraced_syscall()) ? " is " : " is not ") << "in a syscall";
-  address_of_last_execution_resume = ip();
+  address_of_last_execution_resume = resume_ip;
   how_last_execution_resumed = how;
   set_debug_status(0);
 
