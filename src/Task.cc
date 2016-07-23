@@ -875,10 +875,13 @@ TrapReasons Task::compute_trap_reasons() {
      * right.  The SI_KERNEL code is seen in the int3 test, so we
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
+    pending_siginfo.si_addr = (void *)((char *)ip.register_value() - 1);
+#if 0
     if (reasons.breakpoint) {
       reasons.breakpoint =
         as->is_breakpoint_instruction(this, address_of_last_execution_resume);
     }
+#endif
   }
   LOG(debug) << "c_t_r at " << ip << "/" << address_of_last_execution_resume << ": " << reasons.singlestep << reasons.breakpoint << reasons.watchpoint;
   return reasons;
