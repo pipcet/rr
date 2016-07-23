@@ -1406,6 +1406,18 @@ static bool is_in_non_sigreturn_exit_syscall(Task* t) {
   return true;
 }
 
+bool is_in_sigreturn_exit_syscall(Task* t) {
+  if (!t->status().is_syscall()) {
+    return false;
+  }
+  if (t->session().is_recording()) {
+    auto rt = static_cast<RecordTask*>(t);
+    return !rt->ev().is_syscall_event() ||
+           is_sigreturn(rt->ev().Syscall().number, t->arch());
+  }
+  return false;
+}
+
 /**
  * Call this when we've trapped in a syscall (entry or exit) in the kernel,
  * to normalize registers.
