@@ -1508,6 +1508,9 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     }
     if (disable_lwp)
       lwp.stop();
+  } else {
+    if (!keep_lwpcb)
+      lwp.stop();
   }
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
