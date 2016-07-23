@@ -207,11 +207,6 @@ public:
   void did_waitpid(WaitStatus status, siginfo_t* override_siginfo,
                    bool keep_lwpcb, SyscallState old_state);
 
-  void update_syscall_state(SyscallState old_state, WaitStatus status);
-  void update_syscall_state(WaitStatus status);
-  void update_syscall_state(SyscallState old_state);
-  void update_syscall_state();
-
   /**
    * Syscalls have side effects on registers (e.g. setting the flags register).
    * Perform those side effects on |regs| and do set_regs() on that to make it
@@ -403,6 +398,7 @@ public:
    * Determine why a SIGTRAP occurred. Uses debug_status() but doesn't
    * consume it.
    */
+  TrapReasons compute_trap_reasons(remote_code_ptr ip);
   TrapReasons compute_trap_reasons();
 
   /**
@@ -489,8 +485,6 @@ public:
    * Return the status of this as of the last successful wait()/try_wait() call.
    */
   WaitStatus status() const { return wait_status; }
-
-  SyscallState state() const { return syscall_state; }
 
   /**
    * Return the ptrace event as of the last call to |wait()/try_wait()|.
@@ -755,7 +749,6 @@ public:
     int desched_fd_child;
     int cloned_file_data_fd_child;
     WaitStatus wait_status;
-    SyscallState syscall_state;
     bool thread_locals_initialized;
   };
 
@@ -949,7 +942,6 @@ protected:
   // The most recent status of this task as returned by
   // waitpid().
   WaitStatus wait_status;
-  SyscallState syscall_state;
   // The most recent siginfo (captured when wait_status shows pending_sig())
   siginfo_t pending_siginfo;
   // True when a PTRACE_EXIT_EVENT has been observed in the wait_status
@@ -959,8 +951,6 @@ protected:
   unsigned long update_syscall_count;
   unsigned long ptrace_cont_count;
   unsigned long extra_waitpids;
-
-  Registers syscall_state_registers;
 
   PropertyTable properties_;
 

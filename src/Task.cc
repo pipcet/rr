@@ -86,12 +86,10 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       extra_registers_known(false),
       session_(&session),
       top_of_stack(),
-      syscall_state(NO_SYSCALL),
       seen_ptrace_exit_event(false),
       update_syscall_count(0),
       ptrace_cont_count(0),
-      extra_waitpids(0),
-      syscall_state_registers(a)
+      extra_waitpids(0)
 {}
 
 void Task::destroy() {
@@ -131,74 +129,6 @@ Task::~Task() {
   fds->erase_task(this);
 
   LOG(debug) << "  dead";
-}
-
-void Task::update_syscall_state(SyscallState old_state, WaitStatus status)
-{
-  update_syscall_count++;
-
-  struct user_regs_struct ptrace_regs;
-  Registers r(arch());
-  ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs);
-  r.set_from_ptrace(ptrace_regs);
-
-  if (old_state == ENTERING_SYSCALL_PTRACE) {
-    if (status.is_syscall() || status.get() == 0) {
-      syscall_state = EXITING_SYSCALL;
-    } else if (status.ptrace_event() && status.ptrace_event() != PTRACE_EVENT_SECCOMP) {
-    } else if (status.ptrace_event()) {
-      syscall_state = ENTERING_SYSCALL;
-    } else if (status.fatal_sig()) {
-      //ASSERT(this, 1 == 0);
-      syscall_state = NO_SYSCALL;
-    } else {
-      LOG(warn) << "problematic wait_status " <<status << " after " << how_last_execution_resumed;
-      if (how_last_execution_resumed == RESUME_SINGLESTEP ||
-          how_last_execution_resumed == RESUME_SYSEMU_SINGLESTEP) {
-        syscall_state = NO_SYSCALL;
-      } else {
-        //fprintf(stderr, "problematic wait_status %d\n", (int)status.get());
-        syscall_state = NO_SYSCALL;
-        //ASSERT(this, 0);
-      }
-    }
-  } else {
-    if (status.is_syscall()) {
-      if (syscall_state != ENTERING_SYSCALL) {
-        LOG(warn) << "no PTRACE_EVENT_SECCOMP!";
-        syscall_state = ENTERING_SYSCALL_PTRACE;
-      } else {
-        syscall_state = ENTERING_SYSCALL_PTRACE;
-      }
-    } else if (status.ptrace_event() == PTRACE_EVENT_SECCOMP) {
-      syscall_state = ENTERING_SYSCALL;
-    } else if (status.ptrace_event() == PTRACE_EVENT_FORK) {
-      syscall_state = ENTERING_SYSCALL_PTRACE;
-    } else
-      syscall_state = NO_SYSCALL;
-  }
-
-  LOG(debug) << "syscall_state " << old_state << " -> " << syscall_state <<
-    " wait_status " << status << " old IP " << address_of_last_execution_resume << " counts " << update_syscall_count << "/" << ptrace_cont_count << " ips " << syscall_state_registers.ip() << " -> " << r.ip();
-
-  ASSERT(this, update_syscall_count == ptrace_cont_count + 1);
-
-  syscall_state_registers = r;
-}
-
-void Task::update_syscall_state(SyscallState state)
-{
-  update_syscall_state(state, wait_status);
-}
-
-void Task::update_syscall_state(WaitStatus status)
-{
-  update_syscall_state(syscall_state, status);
-}
-
-void Task::update_syscall_state()
-{
-  update_syscall_state(syscall_state);
 }
 
 void Task::finish_emulated_syscall() {
@@ -251,7 +181,6 @@ void Task::dump(FILE* out) const {
   out = out ? out : stderr;
   stringstream ss;
   ss << wait_status;
-  ss << syscall_state;
   fprintf(out, "  %s(tid:%d rec_tid:%d status:0x%s%s)<%p>\n", prname.c_str(),
           tid, rec_tid, ss.str().c_str(), unstable ? " UNSTABLE" : "", this);
   if (session().is_recording()) {
@@ -633,47 +562,47 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
     if (regs().ip() == RR_PAGE_LWP_THUNK ||
         regs().ip() == RR_PAGE_LWP_THUNK+1 ||
         regs().ip() == RR_PAGE_LWP_THUNK+2) {
-    interrupted_syscall:
-      LOG(debug) << "Interrupted syscall, resetting, " << registers.syscallno();
-      syscall_state = NO_SYSCALL;
-      r.set_syscallno(registers.syscallno());
-      if (stop_sig() == SIGTRAP) {
-        TrapReasons reasons = compute_trap_reasons();
+      LOG(debug) << "Interrupted syscall, resetting, " << regs().syscallno();
+      if (stop_sig() && stop_sig() != SIGTRAP) {
+        interrupted = true;
+        break;
+      } else if (stop_sig()) {
+        TrapReasons reasons = compute_trap_reasons(r.ip());
 
-        if (!reasons.breakpoint && !reasons.singlestep) {
+        if (reasons.watchpoint || reasons.breakpoint || !reasons.singlestep) {
           interrupted = true;
           break;
         }
-      } else if (stop_sig()) {
-        interrupted = true;
-        break;
+        continue;
       }
+      r.set_syscallno(regs().syscallno());
       if (!restarted) {
         r.set_ip(r.ip() - ((arch() == x86_64) ? 2 : 2));
         restarted = true;
       }
       set_regs(r);
       goto again;
-    }
-    LOG(debug) << "stopped with " << wait_status;
-    if (regs().ip() == RR_PAGE_LWP_THUNK_END) {
+    } else {
+      if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
+        LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
+        continue;
+      }
+      if (stop_sig() == SIGTRAP) {
+        TrapReasons reasons = compute_trap_reasons(r.ip());
+
+        if (!reasons.breakpoint && !reasons.watchpoint && reasons.singlestep) {
+          if (regs().ip() == RR_PAGE_LWP_THUNK_END)
+            break;
+          continue;
+        }
+      }
+      interrupted = true;
       break;
     }
+    LOG(debug) << "stopped with " << wait_status;
     LOG(debug) << "stopped with " << wait_status << " at IP " << ip();
     if (!stop_sig()) {
       continue;
-    }
-    if (stop_sig() == SIGTRAP) {
-      TrapReasons reasons = compute_trap_reasons();
-
-      if (reasons.breakpoint && (regs().ip() == RR_PAGE_LWP_THUNK ||
-                                 regs().ip() == RR_PAGE_LWP_THUNK+1 ||
-                                 regs().ip() == RR_PAGE_LWP_THUNK+2))
-        goto interrupted_syscall;
-      else if (reasons.breakpoint)
-        {}
-      else if (reasons.singlestep)
-        continue;
     }
     if (ReplaySession::is_ignored_signal(stop_sig()) &&
         session().is_replaying())
@@ -885,6 +814,10 @@ void Task::set_debug_status(uintptr_t status) {
 }
 
 TrapReasons Task::compute_trap_reasons() {
+  return compute_trap_reasons(ip());
+}
+
+  TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
   ASSERT(this, stop_sig() == SIGTRAP);
   TrapReasons reasons;
   uintptr_t status = debug_status();
@@ -894,7 +827,7 @@ TrapReasons Task::compute_trap_reasons() {
   // step over those instructions so we need to detect that here.
   if (how_last_execution_resumed == RESUME_SINGLESTEP &&
       is_at_syscall_instruction(this, address_of_last_execution_resume) &&
-      ip() ==
+      ip ==
           address_of_last_execution_resume +
               syscall_instruction_length(arch())) {
     reasons.singlestep = true;
@@ -915,7 +848,7 @@ TrapReasons Task::compute_trap_reasons() {
       as->has_any_watchpoint_changes() || (DS_WATCHPOINT_ANY & status);
 
   // If we triggered a breakpoint, this would be the address of the breakpoint
-  remote_code_ptr ip_at_breakpoint = ip().decrement_by_bkpt_insn_length(arch());
+  remote_code_ptr ip_at_breakpoint = ip.decrement_by_bkpt_insn_length(arch());
   // Don't trust siginfo to report execution of a breakpoint if singlestep or
   // watchpoint triggered.
   if (reasons.singlestep) {
@@ -939,9 +872,8 @@ TrapReasons Task::compute_trap_reasons() {
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
     if (reasons.breakpoint) {
-      ASSERT(this, as->is_breakpoint_instruction(this, ip_at_breakpoint))
-          << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
-          << si;
+      reasons.breakpoint =
+        as->is_breakpoint_instruction(this, address_of_last_execution_resume);
     }
   }
   return reasons;
@@ -961,21 +893,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << (sig ? string(", signal ") + signal_name(sig) : string())
              << " at ip " << ip()
              << " (previously " << address_of_last_execution_resume2 << ")"
-             << " ticks " << tick_period
-             << " syscall state " << syscall_state << (lwpcb_set ? "" : "XXX");
-
-  /* This is annoying. The SECCOMP/SYSCALL/SYSCALL rhythm no longer applies
-   * when there is a bad syscall. */
-  if (syscall_state == ENTERING_SYSCALL_PTRACE) {
-  }
-
-  if (syscall_state == ENTERING_SYSCALL_PTRACE ||
-      syscall_state == ENTERING_SYSCALL) {
-    if (uintptr_t(regs().original_syscallno()) > 511)
-      syscall_state = EXITING_SYSCALL;
-    else
-      tick_period = RESUME_NO_TICKS;
-  }
+             << " ticks " << tick_period;
 
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
   // Always resetting here, and always to a nonzero number, improves
@@ -1053,22 +971,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
     // wait() will see this and report the ptrace-exit event.
     detected_unexpected_exit = true;
   } else {
-#if 0
-    struct user_regs_struct ptrace_regs;
-    if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
-      registers.set_from_ptrace(ptrace_regs);
-      LOG(debug) << "pre: " << ip() << " " << regs().original_syscallno();
-      regs().print_register_file(stderr);
-    }
     ptrace_if_alive(how, nullptr, (void*)(uintptr_t)sig);
-    if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
-      registers.set_from_ptrace(ptrace_regs);
-      LOG(debug) << "post: " << ip() << " " << regs().original_syscallno();
-      regs().print_register_file(stderr);
-    }
-#else
-    ptrace_if_alive(how, nullptr, (void*)(uintptr_t)sig);
-#endif
   }
   ptrace_cont_count++;
   wait_status = WaitStatus();
@@ -1478,10 +1381,6 @@ bool Task::rr_page_mapped()
 }
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep_lwpcb) {
-  did_waitpid(status, override_siginfo, keep_lwpcb, syscall_state);
-}
-
-void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep_lwpcb, SyscallState old_state) {
   if (is_stopped) {
     ASSERT(this, stopped_prematurely || status.ptrace_event() == PTRACE_EVENT_EXIT);
     if (stopped_prematurely)
@@ -1493,10 +1392,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
   Ticks more_ticks = 0;
   if (rr_page_mapped() && !keep_lwpcb) {
     bool disable_lwp = true;
-    if (old_state == ENTERING_SYSCALL_PTRACE)
-      disable_lwp = false;
-    if (old_state == ENTERING_SYSCALL)
-      disable_lwp = false;
     lwp.init_buffer(AddressSpace::lwp_buffer_start(), AddressSpace::lwp_buffer_size());
     if (lwp.read_lwp_xsave(disable_lwp)) {
       lwp.lwp_xsave_to_lwpcb();
@@ -1504,12 +1399,8 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     } else {
       LOG(debug) << "LWP disabled";
     }
-    if (disable_lwp)
-      lwp.stop();
-  } else {
-    if (!keep_lwpcb)
-      lwp.stop();
   }
+  lwp.stop();
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
 
@@ -1525,6 +1416,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
       registers.set_from_ptrace(ptrace_regs);
       did_read_regs = true;
+      //registers.print_register_file(stderr);
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
@@ -1591,8 +1483,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     // If we couldn't read registers, don't fix them up!
     set_regs(registers);
   }
-  if (!seen_ptrace_exit_event)
-    update_syscall_state(old_state);
 }
 
 bool Task::try_wait() {
@@ -1834,7 +1724,6 @@ Task::CapturedState Task::capture_state() {
   state.scratch_ptr = scratch_ptr;
   state.scratch_size = scratch_size;
   state.wait_status = wait_status;
-  state.syscall_state = syscall_state;
   state.ticks = ticks;
   state.top_of_stack = top_of_stack;
   state.thread_locals_initialized = thread_locals_initialized;
@@ -1887,7 +1776,6 @@ void Task::copy_state(const CapturedState& state) {
   // Whatever |from|'s last wait status was is what ours would
   // have been.
   wait_status = state.wait_status;
-  syscall_state = state.syscall_state;
 
   ticks = state.ticks;
 
