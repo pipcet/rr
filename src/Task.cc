@@ -571,7 +571,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         interrupted = true;
         break;
       } else if (stop_sig()) {
-        TrapReasons reasons = compute_trap_reasons(r.ip());
+        TrapReasons reasons = compute_trap_reasons(regs().ip());
 
         if (reasons.watchpoint || reasons.breakpoint || !reasons.singlestep) {
           interrupted = true;
@@ -579,11 +579,11 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         }
         continue;
       }
-      r.set_syscallno(regs().syscallno());
       if (!restarted) {
-        r.set_ip(r.ip() - ((arch() == x86_64) ? 2 : 2));
+        r.set_ip(r.ip() - 2);
         restarted = true;
       }
+      r.set_syscallno(regs().syscallno());
       set_regs(r);
       goto again;
     } else {
@@ -600,8 +600,6 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
           continue;
         }
       }
-      interrupted = true;
-      break;
     }
     LOG(debug) << "stopped with " << wait_status;
     LOG(debug) << "stopped with " << wait_status << " at IP " << ip();
@@ -620,10 +618,6 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
   }
 
   set_regs(r);
-  if (interrupted) {
-    lwp.read_lwp_xsave(true);
-    lwp.stop();
-  }
   return !interrupted;
 }
 
@@ -821,7 +815,7 @@ TrapReasons Task::compute_trap_reasons() {
   return compute_trap_reasons(ip());
 }
 
-  TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
+TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
   ASSERT(this, stop_sig() == SIGTRAP);
   TrapReasons reasons;
   uintptr_t status = debug_status();
