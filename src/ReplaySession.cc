@@ -632,6 +632,7 @@ Completion ReplaySession::emulate_async_signal(
     bool at_target = is_same_execution_point(
         t, regs, ticks_left, &mismatched_regs, &mismatched_regs_ptr);
     if (pending_SIGTRAP) {
+      LOG(debug) << "SIGTRAP pending, ip " << t->ip();
       TrapReasons trap_reasons = t->compute_trap_reasons();
       BreakpointType breakpoint_type =
           t->vm()->get_breakpoint_type_for_retired_insn(t->ip());
