@@ -563,6 +563,10 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         regs().ip() == RR_PAGE_LWP_THUNK+1 ||
         regs().ip() == RR_PAGE_LWP_THUNK+2) {
       LOG(debug) << "Interrupted syscall, resetting, " << regs().syscallno();
+      if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
+        LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
+        continue;
+      }
       if (stop_sig() && stop_sig() != SIGTRAP) {
         interrupted = true;
         break;
