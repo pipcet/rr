@@ -1404,7 +1404,6 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
       LOG(debug) << "LWP disabled";
     }
   }
-  lwp.stop();
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
 
