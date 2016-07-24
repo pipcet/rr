@@ -883,7 +883,7 @@ static const Property<bool, AddressSpace> thread_locals_initialized_property;
 
 bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
                             TicksRequest tick_period, int sig,
-                            bool lwpcb_set, bool stash_signals) {
+                            bool lwpcb_set, bool stash_signals __attribute__((unused))) {
   remote_code_ptr resume_ip = ip();
 
   LOG(debug) << "(I) resuming execution of " << tid << " with "
