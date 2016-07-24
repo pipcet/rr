@@ -569,17 +569,20 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         continue;
       }
       if (stop_sig() && stop_sig() != SIGTRAP) {
+        LOG(debug) << "signal!";
         interrupted = true;
         break;
       } else if (stop_sig()) {
         TrapReasons reasons = compute_trap_reasons(regs().ip());
 
         if (reasons.watchpoint || reasons.breakpoint || !reasons.singlestep) {
+          LOG(debug) << "signal SIGTRAP";
           interrupted = true;
           break;
         }
         continue;
       }
+      LOG(debug) << "restarting at ip " << r.ip();
       if (!restarted) {
         r.set_ip(r.ip() - 2);
         restarted = true;
@@ -1188,6 +1191,7 @@ static struct timeval to_timeval(double t) {
 void Task::wait(double interrupt_after_elapsed, bool keep_lwpcb) {
   if (is_stopped) {
     ASSERT(this, stopped_prematurely);
+    stopped_prematurely = false;
     return;
   }
 
@@ -1238,6 +1242,7 @@ void Task::wait(double interrupt_after_elapsed, bool keep_lwpcb) {
     }
 
     if (!sent_wait_interrupt && interrupt_after_elapsed) {
+      LOG(debug) << "sent wait interrupt";
       ptrace_if_alive(PTRACE_INTERRUPT, nullptr, nullptr);
       sent_wait_interrupt = true;
     }
@@ -1377,12 +1382,6 @@ bool Task::rr_page_mapped()
 }
 
 void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep_lwpcb) {
-  if (is_stopped) {
-    ASSERT(this, stopped_prematurely || status.ptrace_event() == PTRACE_EVENT_EXIT);
-    if (stopped_prematurely)
-      return;
-  }
-
   wait_status = status;
 
   Ticks more_ticks = 0;
@@ -1411,7 +1410,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool keep
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
       registers.set_from_ptrace(ptrace_regs);
       did_read_regs = true;
-      //registers.print_register_file(stderr);
+      LOG(debug) << "debug status " << debug_status();
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
