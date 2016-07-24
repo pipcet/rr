@@ -580,7 +580,6 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
           interrupted = true;
           break;
         }
-        continue;
       }
       LOG(debug) << "restarting at ip " << r.ip();
       if (!restarted) {
