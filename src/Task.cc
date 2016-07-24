@@ -561,16 +561,15 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       continue;
     }
     if (regs().ip() == RR_PAGE_LWP_THUNK ||
-        regs().ip() == RR_PAGE_LWP_THUNK+1 ||
-        regs().ip() == RR_PAGE_LWP_THUNK+2) {
+        regs().ip() == RR_PAGE_LWP_THUNK+1) {
       LOG(debug) << "Interrupted syscall, resetting, " << regs().syscallno();
-      if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
+      /* if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
         LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
-        continue;
-      }
+        goto restart;
+        } */
       if (ReplaySession::is_ignored_signal(stop_sig()) &&
           session().is_replaying())
-        continue;
+        goto restart;
       LOG(debug) << "restarting at ip " << r.ip();
       if (stop_sig() && stop_sig() != SIGTRAP) {
         LOG(debug) << "signal!";
@@ -585,6 +584,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
           break;
         }
       }
+    restart:
       if (!restarted) {
         r.set_ip(r.ip() - 2);
         restarted = true;
@@ -593,10 +593,12 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       set_regs(r);
       goto again;
     } else {
+      /*
       if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
         LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
         continue;
       }
+      */
       if (stop_sig() == SIGTRAP) {
         TrapReasons reasons = compute_trap_reasons(r.ip());
 
@@ -615,15 +617,25 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
     if (ReplaySession::is_ignored_signal(stop_sig()) &&
         session().is_replaying())
       continue;
+    /*
     if (stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
       LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
       continue;
     }
+    */
     interrupted = true;
     break;
   }
 
+  is_stopped = true;
+  LOG(debug) << "flags " << r.flags();
+  r.set_flags(r.flags() &~ X86_RF_FLAG);
+  r.clear_singlestep_flag();
   set_regs(r);
+  if (restarted) {
+  }
+
+  set_debug_status(0);
   return !interrupted;
 }
 
@@ -826,11 +838,12 @@ TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
   // During replay we execute syscall instructions in certain cases, e.g.
   // mprotect with syscallbuf. The kernel does not set DS_SINGLESTEP when we
   // step over those instructions so we need to detect that here.
-  if (how_last_execution_resumed == RESUME_SINGLESTEP &&
-      is_at_syscall_instruction(this, address_of_last_execution_resume) &&
-      ip ==
-          address_of_last_execution_resume +
-              syscall_instruction_length(arch())) {
+  if (how_last_execution_resumed == RESUME_SINGLESTEP) {
+    //} &&
+    //  is_at_syscall_instruction(this, address_of_last_execution_resume) &&
+    //  ip ==
+    //     address_of_last_execution_resume +
+    //         syscall_instruction_length(arch())) {
     reasons.singlestep = true;
   } else {
     reasons.singlestep = (status & DS_SINGLESTEP) != 0;
