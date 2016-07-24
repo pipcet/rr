@@ -571,6 +571,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       if (ReplaySession::is_ignored_signal(stop_sig()) &&
           session().is_replaying())
         continue;
+      LOG(debug) << "restarting at ip " << r.ip();
       if (stop_sig() && stop_sig() != SIGTRAP) {
         LOG(debug) << "signal!";
         interrupted = true;
@@ -584,7 +585,6 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
           break;
         }
       }
-      LOG(debug) << "restarting at ip " << r.ip();
       if (!restarted) {
         r.set_ip(r.ip() - 2);
         restarted = true;
@@ -822,6 +822,7 @@ TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
   TrapReasons reasons;
   uintptr_t status = debug_status();
 
+  LOG(debug) << "c_t_r at " << ip << "/" << address_of_last_execution_resume << ";" << how_last_execution_resumed;
   // During replay we execute syscall instructions in certain cases, e.g.
   // mprotect with syscallbuf. The kernel does not set DS_SINGLESTEP when we
   // step over those instructions so we need to detect that here.
@@ -956,6 +957,7 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   how_last_execution_resumed = how;
   if (!lwpcb_set)
     set_debug_status(0);
+  //  if (!lwpcb_set)
 
   pid_t wait_ret = 0;
   if (session().is_recording()) {
