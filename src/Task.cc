@@ -568,6 +568,9 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         LOG(debug) << "discarding SYSCALLBUF_DESCHED_SIGNAL";
         continue;
       }
+      if (ReplaySession::is_ignored_signal(stop_sig()) &&
+          session().is_replaying())
+        continue;
       if (stop_sig() && stop_sig() != SIGTRAP) {
         LOG(debug) << "signal!";
         interrupted = true;
@@ -925,15 +928,25 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         lwp.read_lwp_xsave(false);
         lwp.read_ticks();
         LOG(debug) << "starting LWP";
-        if (!set_lwpcb(stash_signals&&false)) {
+        if (!set_lwpcb(false)) {
+          LOG(warn) << "stopped prematurely!" << (wait_how == RESUME_NONBLOCKING) << wait_status;
+          address_of_last_execution_resume = resume_ip;
+          how_last_execution_resumed = how;
+          set_debug_status(0);
           is_stopped = true;
           stopped_prematurely = (wait_how == RESUME_NONBLOCKING);
+          address_of_last_execution_resume = resume_ip;
+          how_last_execution_resumed = how;
+          set_debug_status(0);
+          extra_registers_known = false;
           return true;
         }
+        set_debug_status(0);
       }
     }
   }
 
+  set_debug_status(0);
   LOG(debug) << "resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string())
@@ -941,7 +954,8 @@ bool Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
              << " which" << ((is_in_traced_syscall() || is_in_untraced_syscall()) ? " is " : " is not ") << "in a syscall";
   address_of_last_execution_resume = resume_ip;
   how_last_execution_resumed = how;
-  set_debug_status(0);
+  if (!lwpcb_set)
+    set_debug_status(0);
 
   pid_t wait_ret = 0;
   if (session().is_recording()) {

@@ -384,6 +384,8 @@ static void handle_desched_event(RecordTask* t, const siginfo_t* si) {
 }
 
 static bool is_safe_to_deliver_signal(RecordTask* t) {
+  if (t->is_in_rr_page_thunk())
+    return false;
   if (!t->syscallbuf_child) {
     /* Can't be in critical section because the lock
      * doesn't exist yet! */
