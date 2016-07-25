@@ -537,6 +537,7 @@ void Task::move_ip_before_breakpoint() {
 bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
   bool interrupted = false;
   bool restarted = false;
+  //  remote_code_ptr last_ip = address_of_last_execution_resume;
  again:
   Registers r = regs();
   registers.setup_llwpcb(this, RR_PAGE_LWP_THUNK_ENTRY, 0x70001000);
@@ -576,7 +577,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
         interrupted = true;
         break;
       } else if (stop_sig()) {
-        TrapReasons reasons = compute_trap_reasons(regs().ip());
+        TrapReasons reasons = compute_trap_reasons(regs().ip(), address_of_last_execution_resume, true);
 
         if (reasons.watchpoint || reasons.breakpoint || !reasons.singlestep) {
           LOG(debug) << "signal SIGTRAP";
@@ -600,7 +601,7 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
       }
       */
       if (stop_sig() == SIGTRAP) {
-        TrapReasons reasons = compute_trap_reasons(r.ip());
+        TrapReasons reasons = compute_trap_reasons(regs().ip(), address_of_last_execution_resume, ip() == address_of_last_execution_resume);
 
         if (!reasons.breakpoint && !reasons.watchpoint && reasons.singlestep) {
           if (regs().ip() == RR_PAGE_LWP_THUNK_END)
@@ -636,6 +637,10 @@ bool Task::set_lwpcb(bool stash_signals __attribute__((unused))) {
   }
 
   set_debug_status(0);
+  if (!interrupted) {
+    wait_status = WaitStatus();
+    pending_siginfo.si_code = 0;
+  }
   return !interrupted;
 }
 
@@ -826,24 +831,29 @@ void Task::set_debug_status(uintptr_t status) {
 }
 
 TrapReasons Task::compute_trap_reasons() {
-  return compute_trap_reasons(ip());
+  return compute_trap_reasons(ip(), address_of_last_execution_resume, false);
 }
 
-TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
+TrapReasons Task::compute_trap_reasons(remote_code_ptr ip, remote_code_ptr last_ip, bool post_syscall) {
   ASSERT(this, stop_sig() == SIGTRAP);
   TrapReasons reasons;
   uintptr_t status = debug_status();
 
-  LOG(debug) << "c_t_r at " << ip << "/" << address_of_last_execution_resume << ";" << how_last_execution_resumed;
+  LOG(warn) << "c_t_r at " << ip << "/" << last_ip << ";" << how_last_execution_resumed << " si: " << get_siginfo() << " ps " << post_syscall;
+
+  if (get_siginfo().si_code == SI_TKILL ||
+      get_siginfo().si_code == SI_USER) {
+    reasons.singlestep = reasons.watchpoint = reasons.breakpoint = false;
+    return reasons;
+  }
+
   // During replay we execute syscall instructions in certain cases, e.g.
   // mprotect with syscallbuf. The kernel does not set DS_SINGLESTEP when we
   // step over those instructions so we need to detect that here.
-  if (how_last_execution_resumed == RESUME_SINGLESTEP) {
-    //} &&
-    //  is_at_syscall_instruction(this, address_of_last_execution_resume) &&
-    //  ip ==
-    //     address_of_last_execution_resume +
-    //         syscall_instruction_length(arch())) {
+  if (how_last_execution_resumed == RESUME_SINGLESTEP &&
+      (post_syscall ||
+       (ip == last_ip + 2 &&
+        is_at_syscall_instruction(this, last_ip)))) {
     reasons.singlestep = true;
   } else {
     reasons.singlestep = (status & DS_SINGLESTEP) != 0;
@@ -867,9 +877,9 @@ TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
   // watchpoint triggered.
   if (reasons.singlestep) {
     reasons.breakpoint =
-        as->is_breakpoint_instruction(this, address_of_last_execution_resume);
+        as->is_breakpoint_instruction(this, last_ip);
     if (reasons.breakpoint) {
-      ASSERT(this, address_of_last_execution_resume == ip_at_breakpoint);
+      ASSERT(this, last_ip == ip_at_breakpoint);
     }
   } else if (reasons.watchpoint) {
     // We didn't singlestep, so watchpoint state is completely accurate.
@@ -885,14 +895,15 @@ TrapReasons Task::compute_trap_reasons(remote_code_ptr ip) {
      * right.  The SI_KERNEL code is seen in the int3 test, so we
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
-    pending_siginfo.si_addr = (void *)((char *)ip.register_value() - 1);
+    //pending_siginfo.si_addr = (void *)((char *)ip.register_value() - 1);
     if (reasons.breakpoint) {
-      ASSERT(this, as->is_breakpoint_instruction(this, ip_at_breakpoint))
-          << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
+      reasons.breakpoint = as->is_breakpoint_instruction(this, ip_at_breakpoint);
+      if (!reasons.breakpoint)
+        LOG(debug) << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
           << si;
     }
   }
-  LOG(debug) << "c_t_r at " << ip << "/" << address_of_last_execution_resume << ": " << reasons.singlestep << reasons.breakpoint << reasons.watchpoint;
+  LOG(debug) << "c_t_r at " << ip << "/" << last_ip << ": " << reasons.singlestep << reasons.breakpoint << reasons.watchpoint;
   return reasons;
 }
 

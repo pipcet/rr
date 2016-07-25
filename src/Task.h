@@ -398,7 +398,7 @@ public:
    * Determine why a SIGTRAP occurred. Uses debug_status() but doesn't
    * consume it.
    */
-  TrapReasons compute_trap_reasons(remote_code_ptr ip);
+  TrapReasons compute_trap_reasons(remote_code_ptr ip, remote_code_ptr last_ip, bool post_syscall);
   TrapReasons compute_trap_reasons();
 
   /**
