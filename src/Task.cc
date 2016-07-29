@@ -78,6 +78,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       registers(a),
       how_last_execution_resumed(RESUME_CONT),
       is_stopped(false),
+      stopped_prematurely(false),
       detected_unexpected_exit(false),
       extra_registers(a),
       extra_registers_known(false),
@@ -714,18 +715,27 @@ void Task::set_debug_status(uintptr_t status) {
 }
 
 TrapReasons Task::compute_trap_reasons() {
+  return compute_trap_reasons(ip(), address_of_last_execution_resume, false);
+}
+
+TrapReasons Task::compute_trap_reasons(remote_code_ptr ip, remote_code_ptr last_ip, bool post_syscall) {
   ASSERT(this, stop_sig() == SIGTRAP);
   TrapReasons reasons;
   uintptr_t status = debug_status();
+
+  if (get_siginfo().si_code == SI_TKILL ||
+      get_siginfo().si_code == SI_USER) {
+    reasons.singlestep = reasons.watchpoint = reasons.breakpoint = false;
+    return reasons;
+  }
 
   // During replay we execute syscall instructions in certain cases, e.g.
   // mprotect with syscallbuf. The kernel does not set DS_SINGLESTEP when we
   // step over those instructions so we need to detect that here.
   if (how_last_execution_resumed == RESUME_SINGLESTEP &&
-      is_at_syscall_instruction(this, address_of_last_execution_resume) &&
-      ip() ==
-          address_of_last_execution_resume +
-              syscall_instruction_length(arch())) {
+      (post_syscall ||
+       (ip == last_ip + syscall_instruction_length(arch()) &&
+        is_at_syscall_instruction(this, last_ip)))) {
     reasons.singlestep = true;
   } else {
     reasons.singlestep = (status & DS_SINGLESTEP) != 0;
@@ -744,14 +754,14 @@ TrapReasons Task::compute_trap_reasons() {
       as->has_any_watchpoint_changes() || (DS_WATCHPOINT_ANY & status);
 
   // If we triggered a breakpoint, this would be the address of the breakpoint
-  remote_code_ptr ip_at_breakpoint = ip().decrement_by_bkpt_insn_length(arch());
+  remote_code_ptr ip_at_breakpoint = ip.decrement_by_bkpt_insn_length(arch());
   // Don't trust siginfo to report execution of a breakpoint if singlestep or
   // watchpoint triggered.
   if (reasons.singlestep) {
     reasons.breakpoint =
-        as->is_breakpoint_instruction(this, address_of_last_execution_resume);
+        as->is_breakpoint_instruction(this, last_ip);
     if (reasons.breakpoint) {
-      ASSERT(this, address_of_last_execution_resume == ip_at_breakpoint);
+      ASSERT(this, last_ip == ip_at_breakpoint);
     }
   } else if (reasons.watchpoint) {
     // We didn't singlestep, so watchpoint state is completely accurate.
@@ -768,8 +778,9 @@ TrapReasons Task::compute_trap_reasons() {
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
     if (reasons.breakpoint) {
-      ASSERT(this, as->is_breakpoint_instruction(this, ip_at_breakpoint))
-          << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
+      reasons.breakpoint = as->is_breakpoint_instruction(this, ip_at_breakpoint);
+      if (!reasons.breakpoint)
+        LOG(debug) << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
           << si;
     }
   }
@@ -811,6 +822,10 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
         how_last_execution_resumed = how;
         set_debug_status(0);
         is_stopped = true;
+        stopped_prematurely = (wait_how == RESUME_NONBLOCKING);
+        address_of_last_execution_resume = resume_ip;
+        how_last_execution_resumed = how;
+        set_debug_status(0);
         extra_registers_known = false;
 
         return;
@@ -818,12 +833,15 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
     }
   }
 
+  set_debug_status(0);
   LOG(debug) << "resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string());
   address_of_last_execution_resume = ip();
+  address_of_last_execution_resume = resume_ip;
   how_last_execution_resumed = how;
-  set_debug_status(0);
+  if (!recurse)
+    set_debug_status(0);
 
   pid_t wait_ret = 0;
   if (session().is_recording()) {
@@ -857,6 +875,7 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   }
 
   is_stopped = false;
+  stopped_prematurely = false;
   extra_registers_known = false;
   if (RESUME_WAIT == wait_how) {
     wait(0, recurse);
@@ -1067,6 +1086,12 @@ static struct timeval to_timeval(double t) {
 }
 
 void Task::wait(double interrupt_after_elapsed, bool recurse) {
+  if (is_stopped) {
+    ASSERT(this, stopped_prematurely);
+    stopped_prematurely = false;
+    return;
+  }
+
   LOG(debug) << "going into blocking waitpid(" << tid << ") ...";
   ASSERT(this, !unstable) << "Don't wait for unstable tasks";
   ASSERT(this, session().is_recording() || interrupt_after_elapsed == 0);
@@ -1114,6 +1139,7 @@ void Task::wait(double interrupt_after_elapsed, bool recurse) {
     }
 
     if (!sent_wait_interrupt && interrupt_after_elapsed) {
+      LOG(debug) << "sent wait interrupt";
       ptrace_if_alive(PTRACE_INTERRUPT, nullptr, nullptr);
       sent_wait_interrupt = true;
     }
@@ -1177,6 +1203,18 @@ static bool is_in_non_sigreturn_exit_syscall(Task* t) {
            !is_sigreturn(rt->ev().Syscall().number, t->arch());
   }
   return true;
+}
+
+bool is_in_sigreturn_exit_syscall(Task* t) {
+  if (!t->status().is_syscall()) {
+    return false;
+  }
+  if (t->session().is_recording()) {
+    auto rt = static_cast<RecordTask*>(t);
+    return !rt->ev().is_syscall_event() ||
+           is_sigreturn(rt->ev().Syscall().number, t->arch());
+  }
+  return false;
 }
 
 /**
@@ -1250,16 +1288,19 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool recu
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
 
+  LOG(debug) << "  ticks = " << (ticks - more_ticks) << " + " << more_ticks;
   LOG(debug) << "  (refreshing register cache)";
   intptr_t original_syscallno = registers.original_syscallno();
   // Skip reading registers in a PTRACE_EVENT_EXEC, since
   // we may not know the correct architecture.
   bool did_read_regs = false;
+  bool need_to_set_regs = false;
   if (status.ptrace_event() != PTRACE_EVENT_EXEC) {
     struct user_regs_struct ptrace_regs;
     if (ptrace_if_alive(PTRACE_GETREGS, nullptr, &ptrace_regs)) {
       registers.set_from_ptrace(ptrace_regs);
       did_read_regs = true;
+      LOG(debug) << "debug status " << debug_status();
     } else {
       LOG(debug) << "Unexpected process death for " << tid;
       status = WaitStatus::for_ptrace_event(PTRACE_EVENT_EXIT);
@@ -1277,12 +1318,14 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool recu
   }
 
   is_stopped = true;
+  stopped_prematurely = false;
+  if (did_read_regs)
+    LOG(debug) << "IP " << ip();
   wait_status = status;
   if (ptrace_event() == PTRACE_EVENT_EXIT) {
     seen_ptrace_exit_event = true;
   }
 
-  bool need_to_set_regs = false;
   if (registers.singlestep_flag()) {
     registers.clear_singlestep_flag();
     need_to_set_regs = true;
@@ -1315,7 +1358,7 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool recu
   // During replay most untraced syscalls are replaced with "xor eax,eax" so
   // rcx is always -1, but during recording it sometimes isn't after we've
   // done a real syscall.
-  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page()) {
+  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page_syscall()) {
     fixup_syscall_registers(registers);
     need_to_set_regs = true;
   }
@@ -1326,6 +1369,9 @@ void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool recu
 }
 
 bool Task::try_wait() {
+  if (is_stopped)
+    return true;
+
   int raw_status = 0;
   pid_t ret = waitpid(tid, &raw_status, WNOHANG | __WALL | WSTOPPED);
   ASSERT(this, 0 <= ret) << "waitpid(" << tid << ", NOHANG) failed with "
@@ -1573,8 +1619,9 @@ void Task::copy_state(const CapturedState& state) {
   {
     AutoRemoteSyscalls remote(this);
     {
-      char prname[16];
-      strncpy(prname, state.prname.c_str(), sizeof(prname));
+      char prname[17];
+      strncpy(prname, state.prname.c_str(), sizeof(prname)-1);
+      prname[sizeof(prname)-1] = 0;
       AutoRestoreMem remote_prname(remote, (const uint8_t*)prname,
                                    sizeof(prname));
       LOG(debug) << "    setting name to " << prname;

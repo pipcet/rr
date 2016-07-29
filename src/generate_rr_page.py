@@ -10,18 +10,40 @@ def write_rr_page(f, is_64, is_replay):
     # RR_PAGE_SYSCALL_INSTRUCTION_END.
     if is_64:
         bytes = bytearray([
-            0x0f, 0x05, # syscall
-            0xc3, # ret
+            0x0f, 0x05,                    # syscall
+            0xc3,
+        ])
+        nocall_bytes = bytearray([
+            0x31, 0xc0,                    # xor %eax,%eax
+            0xc3,
+        ])
+        thunk_bytes = bytearray([
+            0x90,
+            0x90,
+            0x90,
+            0x90,
+            0xb8, 0x00, 0x10, 0x00, 0x70,  # mov $0x70001000,%eax
+            0x8f, 0xe9, 0xf8, 0x12, 0xc0,  # llwpcb %rax
+            0x90, 0x90,
         ])
     else:
         bytes = bytearray([
-            0xcd, 0x80, # int 0x80
-            0xc3, # ret
+            0xcd, 0x80,                    # int $0x80
+            0xc3,
         ])
-    nocall_bytes = bytearray([
-        0x31, 0xc0, # xor %eax,%eax
-        0xc3, # ret
-    ])
+        nocall_bytes = bytearray([
+            0x31, 0xc0,                    # xor %eax,%eax
+            0xc3,
+        ])
+        thunk_bytes = bytearray([
+            0x90,
+            0x90,
+            0x90,
+            0x90,
+            0xb8, 0x00, 0x10, 0x00, 0x70,  # mov $0x70001000,%eax
+            0x8f, 0xe9, 0x78, 0x12, 0xc0,  # llwpcb %eax
+            0x90, 0x90,
+        ])
 
     # traced
     f.write(bytes)
@@ -53,6 +75,9 @@ def write_rr_page(f, is_64, is_replay):
         f.write(nocall_bytes)
     else:
         f.write(bytes)
+
+
+    f.write(thunk_bytes);
 
     ff_bytes = bytearray([0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff])
     f.write(ff_bytes)

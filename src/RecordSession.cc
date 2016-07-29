@@ -966,10 +966,11 @@ static void preinject_signal(RecordTask* t) {
        * later delivery.
        */
       if (t->stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
-        LOG(debug) << "    stopped with signal " << signal_name(sig)
+        LOG(debug) << "    stopped with signal " << signal_name(t->stop_sig())
                    << "; ignoring it and carrying on";
+      } else if (t->stop_sig() == SIGTRAP) {
       } else {
-        LOG(debug) << "    stopped with signal " << signal_name(sig)
+        LOG(debug) << "    stopped with signal " << signal_name(t->stop_sig())
                    << "; stashing it and carrying on";
         t->stash_sig();
       }

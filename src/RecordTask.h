@@ -280,7 +280,7 @@ public:
     remote_ptr<void> p = ip().to_data_ptr<void>();
     return (as->syscallbuf_lib_start() <= p && p < as->syscallbuf_lib_end() &&
             !as->monkeypatcher().is_syscallbuf_excluded_instruction(p)) ||
-           is_in_rr_page();
+           is_in_rr_page_syscall();
   }
   /**
    * Shortcut to the most recent |pending_event->desched.rec| when

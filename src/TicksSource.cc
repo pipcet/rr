@@ -3,6 +3,7 @@
 #include "TicksSource.h"
 
 #include <elf.h>
+#include "LWP.h"
 #include "PerfCounters.h"
 
 #include <asm/ldt.h>
@@ -32,6 +33,7 @@
 #include "ExtraRegisters.h"
 #include "FdTable.h"
 #include "PerfCounters.h"
+#include "LWP.h"
 #include "PropertyTable.h"
 #include "Registers.h"
 #include "TaskishUid.h"
@@ -147,6 +149,8 @@ static CpuMicroarch get_cpu_microarch() {
   CpuMicroarch uarch = get_cpu_microarch();
 
   switch (uarch) {
+  case AMDFamily15h:
+    return new LWP(t, t->tid);
   default:
     return new PerfCounters(uarch, t->tid);
   }

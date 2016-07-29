@@ -235,7 +235,7 @@ NewlineTerminatingOstream::~NewlineTerminatingOstream() {
     log_stream() << std::endl;
     flush_log_stream();
     if (Flags::get().fatal_errors_and_warnings && level <= LOG_warn) {
-      abort();
+      //abort();
     }
   }
 }

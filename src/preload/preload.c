@@ -888,9 +888,10 @@ static void arm_desched_event(void) {
 
 static void disarm_desched_event(void) {
   /* See above. */
-  if ((int)privileged_untraced_syscall3(SYS_ioctl, desched_counter_fd,
-                                        PERF_EVENT_IOC_DISABLE, 0)) {
-    fatal("Failed to DISABLE counter %d", desched_counter_fd);
+  int ret;
+  if ((ret = privileged_untraced_syscall3(SYS_ioctl, desched_counter_fd,
+                                          PERF_EVENT_IOC_DISABLE, 0))) {
+    //fatal("Failed to DISABLE counter %d: %d", desched_counter_fd, ret);
   }
 }
 
