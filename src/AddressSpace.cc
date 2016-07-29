@@ -435,6 +435,7 @@ void AddressSpace::post_exec_syscall(Task* t) {
   // Now we can set up the "rr page" at its fixed address. This gives
   // us traced and untraced syscall instructions at known, fixed addresses.
   map_rr_page(t);
+  t->ts->init(this);
 }
 
 void AddressSpace::brk(Task* t, remote_ptr<void> addr, int prot) {

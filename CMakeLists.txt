@@ -269,6 +269,7 @@ set(RR_SOURCES
   src/StdioMonitor.cc
   src/Task.cc
   src/TaskGroup.cc
+  src/TicksSource.cc
   src/TraceFrame.cc
   src/TraceStream.cc
   src/VirtualPerfCounterMonitor.cc

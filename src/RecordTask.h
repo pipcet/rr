@@ -217,6 +217,7 @@ public:
                            SignalDeterministic deterministic);
   bool has_stashed_sig() const { return !stashed_signals.empty(); }
   bool has_stashed_sig(int sig) const;
+  bool has_stashed_time_slice_sig() const;
   struct StashedSignal {
     StashedSignal(const siginfo_t& siginfo, SignalDeterministic deterministic)
         : siginfo(siginfo), deterministic(deterministic) {}

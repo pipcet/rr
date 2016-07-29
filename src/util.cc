@@ -480,6 +480,8 @@ signal_action default_action(int sig) {
 
 SignalDeterministic is_deterministic_signal(Task* t) {
   const siginfo_t& si = t->get_siginfo();
+  if (t->is_time_slice_signal(si))
+    return NONDETERMINISTIC_SIG;
   switch (si.si_signo) {
     /* These signals may be delivered deterministically;
      * we'll check for sure below. */

@@ -67,7 +67,6 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       desched_fd_child(-1),
       // This will be initialized when the syscall buffer is.
       cloned_file_data_fd_child(-1),
-      hpc(_tid),
       tid(_tid),
       rec_tid(_rec_tid > 0 ? _rec_tid : _tid),
       syscallbuf_size(0),
@@ -84,7 +83,10 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       extra_registers_known(false),
       session_(&session),
       top_of_stack(),
-      seen_ptrace_exit_event(false) {}
+      seen_ptrace_exit_event(false)
+{
+  ts = TicksSource::open(this);
+}
 
 void Task::destroy() {
   LOG(debug) << "task " << tid << " (rec:" << rec_tid << ") is dying ...";
@@ -777,7 +779,10 @@ TrapReasons Task::compute_trap_reasons() {
 static const Property<bool, AddressSpace> thread_locals_initialized_property;
 
 void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
-                            TicksRequest tick_period, int sig) {
+                            TicksRequest tick_period, int sig,
+                            bool recurse) {
+  remote_code_ptr resume_ip = ip();
+
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
   // Always resetting here, and always to a nonzero number, improves
   // consistency between recording and replay and hopefully
@@ -785,9 +790,6 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   // replay.
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
-    hpc.reset(tick_period == RESUME_UNLIMITED_TICKS
-                  ? 0xffffffff
-                  : max<Ticks>(1, tick_period));
     // Ensure preload_globals.thread_locals_initialized is up to date. Avoid
     // unnecessary writes by caching last written value per-AddressSpace.
     if (preload_globals) {
@@ -799,6 +801,19 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
           prop = &thread_locals_initialized_property.create(*as);
         }
         *prop = thread_locals_initialized;
+      }
+    }
+    if (!recurse) {
+      if (ts->start_with_interval(tick_period == RESUME_UNLIMITED_TICKS
+                                  ? 0xffffff
+                                  : max<Ticks>(1, tick_period))) {
+        address_of_last_execution_resume = resume_ip;
+        how_last_execution_resumed = how;
+        set_debug_status(0);
+        is_stopped = true;
+        extra_registers_known = false;
+
+        return;
       }
     }
   }
@@ -844,7 +859,7 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   is_stopped = false;
   extra_registers_known = false;
   if (RESUME_WAIT == wait_how) {
-    wait();
+    wait(0, recurse);
   }
 }
 
@@ -1051,7 +1066,7 @@ static struct timeval to_timeval(double t) {
   return v;
 }
 
-void Task::wait(double interrupt_after_elapsed) {
+void Task::wait(double interrupt_after_elapsed, bool recurse) {
   LOG(debug) << "going into blocking waitpid(" << tid << ") ...";
   ASSERT(this, !unstable) << "Don't wait for unstable tasks";
   ASSERT(this, session().is_recording() || interrupt_after_elapsed == 0);
@@ -1140,7 +1155,7 @@ void Task::wait(double interrupt_after_elapsed) {
     siginfo_t si;
     memset(&si, 0, sizeof(si));
     si.si_signo = PerfCounters::TIME_SLICE_SIGNAL;
-    si.si_fd = hpc.ticks_fd();
+    si.si_fd = ts->ticks_fd();
     si.si_code = POLL_IN;
     did_waitpid(status, &si);
     return;
@@ -1149,7 +1164,7 @@ void Task::wait(double interrupt_after_elapsed) {
   if (sent_wait_interrupt) {
     LOG(warn) << "  PTRACE_INTERRUPT raced with another event " << status;
   }
-  did_waitpid(status);
+  did_waitpid(status, nullptr, recurse);
 }
 
 static bool is_in_non_sigreturn_exit_syscall(Task* t) {
@@ -1220,11 +1235,18 @@ void Task::emulate_syscall_entry(const Registers& regs) {
   set_regs(r);
 }
 
-void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo) {
-  Ticks more_ticks = hpc.read_ticks();
-  // Stop PerfCounters ASAP to reduce the possibility that due to bugs or
-  // whatever they pick up something spurious later.
-  hpc.stop();
+bool Task::rr_page_mapped()
+{
+  return (fallible_ptrace(PTRACE_PEEKDATA, remote_ptr<void>(0x70001000), nullptr) != -1);
+}
+
+void Task::did_waitpid(WaitStatus status, siginfo_t* override_siginfo, bool recurse) {
+  wait_status = status;
+
+  Ticks more_ticks = 0;
+  if (!recurse) {
+    more_ticks = ts->stop_and_read();
+  }
   ticks += more_ticks;
   session().accumulate_ticks_processed(more_ticks);
 

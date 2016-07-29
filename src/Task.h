@@ -14,6 +14,7 @@
 #include "Event.h"
 #include "ExtraRegisters.h"
 #include "FdTable.h"
+#include "TicksSource.h"
 #include "PerfCounters.h"
 #include "PropertyTable.h"
 #include "Registers.h"
@@ -130,6 +131,12 @@ public:
   typedef std::vector<WatchConfig> DebugRegs;
 
   /**
+   * Whether the RR page has already been mapped, which is required for
+   * LWP performance counters to run.
+   */
+  bool rr_page_mapped();
+
+  /**
    * We hide the destructor and require clients to call this instead. This
    * lets us make virtual calls from within the destruction code. This
    * does the actual PTRACE_DETACH and then calls the real destructor.
@@ -191,7 +198,8 @@ public:
    * If override_siginfo is non-null and status indicates a pending signal,
    * use *override_siginfo as the siginfo instead of reading it from the kernel.
    */
-  void did_waitpid(WaitStatus status, siginfo_t* override_siginfo = nullptr);
+  void did_waitpid(WaitStatus status, siginfo_t* override_siginfo = nullptr,
+                   bool recurse = false);
 
   /**
    * Syscalls have side effects on registers (e.g. setting the flags register).
@@ -418,7 +426,8 @@ public:
    * and not this.
    */
   void resume_execution(ResumeRequest how, WaitRequest wait_how,
-                        TicksRequest tick_period, int sig = 0);
+                        TicksRequest tick_period, int sig = 0,
+                        bool recurse = false);
 
   /** Return the session this is part of. */
   Session& session() const { return *session_; }
@@ -470,6 +479,16 @@ public:
    * call to |wait()/try_wait()|.  The signal 0 means "no signal".
    */
   int stop_sig() const { return wait_status.stop_sig(); }
+
+  bool is_time_slice_signal(const siginfo_t& si) const
+  {
+    return ts->is_time_slice_signal(&si);
+  }
+
+  bool is_time_slice_signal() const
+  {
+    return is_time_slice_signal(pending_siginfo);
+  }
 
   void clear_wait_status() { wait_status = WaitStatus(); }
 
@@ -528,7 +547,7 @@ public:
    * with the process in a stopped() state. If interrupt_after_elapsed > 0,
    * interrupt the task after that many seconds have elapsed.
    */
-  void wait(double interrupt_after_elapsed = 0);
+  void wait(double interrupt_after_elapsed = 0, bool recurse = false);
   /**
    * Return true if the status of this has changed, but don't
    * block.
@@ -684,7 +703,7 @@ public:
   /* The child's cloned_file_data_fd */
   int cloned_file_data_fd_child;
 
-  PerfCounters hpc;
+  TicksSource* ts;
 
   /* This is always the "real" tid of the tracee. */
   pid_t tid;

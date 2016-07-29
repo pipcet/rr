@@ -974,6 +974,15 @@ void RecordTask::stash_synthetic_sig(const siginfo_t& si,
   stashed_signals.push_back(StashedSignal(si, deterministic));
 }
 
+bool RecordTask::has_stashed_time_slice_sig() const {
+  for (auto it = stashed_signals.begin(); it != stashed_signals.end(); ++it) {
+    if (is_time_slice_signal(it->siginfo)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 bool RecordTask::has_stashed_sig(int sig) const {
   for (auto it = stashed_signals.begin(); it != stashed_signals.end(); ++it) {
     if (it->siginfo.si_signo == sig) {
@@ -1299,13 +1308,9 @@ void RecordTask::record_event(const Event& ev, FlushSyscallbuf flush,
 
   TraceFrame frame(trace_writer().time(), tid, ev, tick_count());
   if (ev.record_exec_info() == HAS_EXEC_INFO) {
-    PerfCounters::Extra extra_perf_values;
-    if (PerfCounters::extra_perf_counters_enabled()) {
-      extra_perf_values = hpc.read_extra();
-    }
     frame.set_exec_info(registers ? *registers : regs(),
                         PerfCounters::extra_perf_counters_enabled()
-                            ? &extra_perf_values
+                            ? nullptr
                             : nullptr,
                         record_extra_regs(ev) ? &extra_regs() : nullptr);
   }
@@ -1405,7 +1410,7 @@ void RecordTask::tgkill(int sig) {
 pid_t RecordTask::get_parent_pid() { return get_ppid(tid); }
 
 void RecordTask::set_tid_and_update_serial(pid_t tid) {
-  hpc.set_tid(tid);
+  ts->set_tid(tid);
   this->tid = rec_tid = tid;
   serial = session().next_task_serial();
 }
