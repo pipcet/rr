@@ -81,8 +81,8 @@ public:
   }
 
   virtual void init(AddressSpace*) override {}
-  virtual bool start_with_interval(Ticks);
-  virtual Ticks stop_and_read();
+  virtual bool start_with_interval(Ticks) override;
+  virtual Ticks stop_and_read() override;
 
   /* This choice is fairly arbitrary; linux doesn't use SIGSTKFLT so we
    * hope that tracees don't either. */
