@@ -221,7 +221,7 @@ static ScopedFd start_ticks(pid_t tid __attribute__((unused)),
                             int group_fd __attribute__((unused)),
                             struct perf_event_attr* attr __attribute__((unused)))
 {
-#if 0
+#if 1
   int fd = syscall(__NR_perf_event_open, attr, tid, -1, group_fd, 0);
   if (0 > fd) {
     if (errno == EACCES) {
@@ -331,7 +331,7 @@ Ticks LWP::read_ticks()
   return ret;
 }
 
-#if 0
+#if 1
 static void init_perf_event_attr(struct perf_event_attr* attr,
                                  perf_type_id type, unsigned config) {
   memset(attr, 0, sizeof(*attr));
@@ -354,7 +354,7 @@ static void init_attributes() {
   }
   attributes_initialized = true;
 
-#if 0
+#if 1
   FILE *f = fopen("/sys/devices/lwp/type", "r");
   if (!f)
     FATAL() << "LWP events not found";
