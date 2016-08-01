@@ -560,6 +560,11 @@ static void init_thread(void) {
 
   args.desched_counter_fd = desched_counter_fd;
 
+  struct timespec ts;
+  ts.tv_sec = 5;
+  ts.tv_nsec = 0;
+  privileged_untraced_syscall1(SYS_nanosleep, &ts);
+
   /* Trap to rr: let the magic begin!
    *
    * If the desched signal is currently blocked, then the tracer
