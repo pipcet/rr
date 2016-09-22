@@ -60,7 +60,7 @@ namespace rr {
  * perhaps pipeline depth and things of that nature are involved.  But
  * those reasons if they exit are currently not understood.
  */
-static const int SKID_SIZE = 70;
+static const int SKID_SIZE = 3;
 
 static void debug_memory(ReplayTask* t) {
   if (should_dump_memory(t->current_trace_frame())) {
@@ -301,7 +301,7 @@ Completion ReplaySession::cont_syscall_boundary(
     t->resume_execution(resume_how, RESUME_WAIT, ticks_request);
   }
 
-  if (t->stop_sig() == PerfCounters::TIME_SLICE_SIGNAL) {
+  if (t->is_time_slice_signal()) {
     // This would normally be triggered by constraints.ticks_target but it's
     // also possible to get stray signals here.
     return INCOMPLETE;
@@ -515,7 +515,8 @@ static void guard_overshoot(ReplayTask* t, const Registers& target_regs,
 
 static void guard_unexpected_signal(ReplayTask* t) {
   if (ReplaySession::is_ignored_signal(t->stop_sig()) ||
-      SIGTRAP == t->stop_sig()) {
+      SIGTRAP == t->stop_sig() ||
+      t->is_time_slice_signal()) {
     return;
   }
 
@@ -868,7 +869,7 @@ Completion ReplaySession::emulate_deterministic_signal(
   }
 
   continue_or_step(t, constraints, RESUME_UNLIMITED_TICKS);
-  if (is_ignored_signal(t->stop_sig())) {
+  if (is_ignored_signal(t->stop_sig()) || t->is_time_slice_signal()) {
     return emulate_deterministic_signal(t, sig, constraints);
   }
   if (SIGTRAP == t->stop_sig()) {
@@ -1000,7 +1001,7 @@ Completion ReplaySession::flush_syscallbuf(ReplayTask* t,
   uint32_t final_mprotect_record_count =
       apply_mprotect_records(t, skip_mprotect_records);
 
-  if (t->stop_sig() == PerfCounters::TIME_SLICE_SIGNAL) {
+  if (t->is_time_slice_signal()) {
     // This would normally be triggered by constraints.ticks_target but it's
     // also possible to get stray signals here.
     return INCOMPLETE;

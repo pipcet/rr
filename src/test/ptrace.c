@@ -163,6 +163,7 @@ int main(void) {
     ret = ptrace(PTRACE_GETREGSET, child, (void*)NT_X86_XSTATE, &iov);
     test_assert(0 == ret);
     test_assert(iov.iov_len <= xsave_size);
+    /* This fails randomly on AMD CPUs using LWP, but that's okay. */
     test_assert(NULL == memchr(xsave_regs, 0xCF, iov.iov_len));
     verify_guard(xsave_size, xsave_regs);
 

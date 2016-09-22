@@ -315,7 +315,7 @@ BreakStatus Session::diagnose_debugger_trap(Task* t, RunCommand run_command) {
       LOG(debug) << "hit debugger breakpoint BEFORE ip " << t->ip() << " for "
                  << t->get_siginfo();
       break_status.breakpoint_hit = true;
-    } else if (stop_sig && stop_sig != PerfCounters::TIME_SLICE_SIGNAL) {
+    } else if (stop_sig && !t->is_time_slice_signal()) {
       break_status.signal = stop_sig;
     }
   } else {

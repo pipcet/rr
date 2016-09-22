@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <string>
 
+#include "TicksSource.h"
 #include "Flags.h"
 #include "kernel_metadata.h"
 #include "log.h"
@@ -32,25 +33,6 @@ static struct perf_event_attr cycles_attr;
 static struct perf_event_attr page_faults_attr;
 static struct perf_event_attr hw_interrupts_attr;
 static struct perf_event_attr instructions_retired_attr;
-
-/*
- * Find out the cpu model using the cpuid instruction.
- * Full list of CPUIDs at http://sandpile.org/x86/cpuid.htm
- * Another list at
- * http://software.intel.com/en-us/articles/intel-architecture-and-processor-identification-with-cpuid-model-and-family-numbers
- */
-enum CpuMicroarch {
-  UnknownCpu,
-  IntelMerom,
-  IntelPenryn,
-  IntelNehalem,
-  IntelWestmere,
-  IntelSandyBridge,
-  IntelIvyBridge,
-  IntelHaswell,
-  IntelBroadwell,
-  IntelSkylake
-};
 
 struct PmuConfig {
   CpuMicroarch uarch;
@@ -75,71 +57,6 @@ static const PmuConfig pmu_configs[] = {
   { IntelMerom, "Intel Merom", 0, 0, 0, false },
 };
 
-static string lowercase(const string& s) {
-  string c = s;
-  transform(c.begin(), c.end(), c.begin(), ::tolower);
-  return c;
-}
-
-/**
- * Return the detected, known microarchitecture of this CPU, or don't
- * return; i.e. never return UnknownCpu.
- */
-static CpuMicroarch get_cpu_microarch() {
-  string forced_uarch = lowercase(Flags::get().forced_uarch);
-  if (!forced_uarch.empty()) {
-    for (size_t i = 0; i < array_length(pmu_configs); ++i) {
-      const PmuConfig& pmu = pmu_configs[i];
-      string name = lowercase(pmu.name);
-      if (name.npos != name.find(forced_uarch)) {
-        LOG(info) << "Using forced uarch " << pmu.name;
-        return pmu.uarch;
-      }
-    }
-    FATAL() << "Forced uarch " << Flags::get().forced_uarch << " isn't known.";
-  }
-
-  auto cpuid_data = cpuid(CPUID_GETFEATURES, 0);
-  unsigned int cpu_type = (cpuid_data.eax & 0xF0FF0);
-  switch (cpu_type) {
-    case 0x006F0:
-    case 0x10660:
-      return IntelMerom;
-    case 0x10670:
-    case 0x106D0:
-      return IntelPenryn;
-    case 0x106A0:
-    case 0x106E0:
-    case 0x206E0:
-      return IntelNehalem;
-    case 0x20650:
-    case 0x206C0:
-    case 0x206F0:
-      return IntelWestmere;
-    case 0x206A0:
-    case 0x206D0:
-    case 0x306e0:
-      return IntelSandyBridge;
-    case 0x306A0:
-      return IntelIvyBridge;
-    case 0x306C0:
-    case 0x306F0:
-    case 0x40650:
-    case 0x40660:
-      return IntelHaswell;
-    case 0x306D0:
-    case 0x406F0:
-    case 0x50660:
-      return IntelBroadwell;
-    case 0x406e0:
-    case 0x506e0:
-      return IntelSkylake;
-    default:
-      FATAL() << "CPU " << HEX(cpu_type) << " unknown.";
-      return UnknownCpu; // not reached
-  }
-}
-
 static void init_perf_event_attr(struct perf_event_attr* attr,
                                  perf_type_id type, unsigned config) {
   memset(attr, 0, sizeof(*attr));
@@ -152,13 +69,12 @@ static void init_perf_event_attr(struct perf_event_attr* attr,
   attr->exclude_guest = 1;
 }
 
-static void init_attributes() {
+static void init_attributes(CpuMicroarch uarch) {
   if (attributes_initialized) {
     return;
   }
   attributes_initialized = true;
 
-  CpuMicroarch uarch = get_cpu_microarch();
   const PmuConfig* pmu = nullptr;
   for (size_t i = 0; i < array_length(pmu_configs); ++i) {
     if (uarch == pmu_configs[i].uarch) {
@@ -187,12 +103,12 @@ static void init_attributes() {
 }
 
 const struct perf_event_attr& PerfCounters::ticks_attr() {
-  init_attributes();
   return rr::ticks_attr;
 }
 
-PerfCounters::PerfCounters(pid_t tid) : tid(tid), started(false) {
-  init_attributes();
+PerfCounters::PerfCounters(CpuMicroarch uarch, pid_t tid)
+  : tid(tid), started(false) {
+  init_attributes(uarch);
 }
 
 static ScopedFd start_counter(pid_t tid, int group_fd,
@@ -313,6 +229,20 @@ void PerfCounters::stop_counting() {
   } else {
     ioctl(fd_ticks, PERF_EVENT_IOC_DISABLE, 0);
   }
+}
+
+bool PerfCounters::start_with_interval(Ticks ticks) {
+  reset(ticks);
+
+  return false;
+}
+
+Ticks PerfCounters::stop_and_read() {
+  Ticks ret = read_ticks();
+
+  stop();
+
+  return ret;
 }
 
 static int64_t read_counter(ScopedFd& fd) {

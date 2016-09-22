@@ -327,7 +327,7 @@ static void handle_desched_event(RecordTask* t, const siginfo_t* si) {
     int sig = t->stop_sig();
     ASSERT(t, sig) << "expected stop-signal, got " << t->status();
     if (SYSCALLBUF_DESCHED_SIGNAL == sig ||
-        PerfCounters::TIME_SLICE_SIGNAL == sig || t->is_sig_ignored(sig)) {
+        t->is_time_slice_signal() || t->is_sig_ignored(sig)) {
       LOG(debug) << "  dropping ignored " << signal_name(sig);
       continue;
     }
@@ -461,6 +461,14 @@ SignalHandled handle_signal(RecordTask* t, siginfo_t* si,
   // ourselves. If the signal was not generated for rr's purposes, we'll
   // modify our copy of the signal state to match what the kernel did.
 
+  if (t->ts->signal(si)) {
+      t->push_event(Event(EV_SCHED, HAS_EXEC_INFO, t->arch()));
+    if (si->si_signo == SIGSEGV && t->is_sig_blocked(SIGSEGV))
+      restore_signal_state(t, sig);
+
+    return SIGNAL_HANDLED;
+  }
+
   /* See if this signal occurred because of an rr implementation detail,
    * and fudge t appropriately. */
   switch (sig) {
@@ -473,10 +481,6 @@ SignalHandled handle_signal(RecordTask* t, siginfo_t* si,
         return SIGNAL_HANDLED;
       }
       break;
-
-    case PerfCounters::TIME_SLICE_SIGNAL:
-      t->push_event(Event(EV_SCHED, HAS_EXEC_INFO, t->arch()));
-      return SIGNAL_HANDLED;
   }
 
   if (deterministic == DETERMINISTIC_SIG &&

@@ -423,6 +423,7 @@ void AddressSpace::post_exec_syscall(Task* t) {
   // Now we can set up the "rr page" at its fixed address. This gives
   // us traced and untraced syscall instructions at known, fixed addresses.
   map_rr_page(t);
+  t->ts->init(this);
 }
 
 void AddressSpace::brk(Task* t, remote_ptr<void> addr, int prot) {
@@ -1142,7 +1143,8 @@ static void assert_segments_match(Task* t, const KernelMapping& input_m,
     err = "flags differ";
   } else if (!normalized_file_names_equal(m, km, TREAT_HEAP_AS_ANONYMOUS) &&
              !(km.is_heap() && m.fsname() == "") &&
-             !(m.is_heap() && km.fsname() == "") && !km.is_vdso()) {
+             !(m.is_heap() && km.fsname() == "") && !km.is_vdso() &&
+             !km.is_lwp() && !m.is_lwp()) {
     // Due to emulated exec, the kernel may identify any of our anonymous maps
     // as [heap] (or not).
     // Kernels before 3.16 have a bug where any mapping at the original VDSO
