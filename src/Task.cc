@@ -1249,7 +1249,6 @@ void Task::wait(double interrupt_after_elapsed, bool recurse) {
   did_waitpid(status, recurse);
 }
 
-#if 0
 static bool is_in_non_sigreturn_exit_syscall(Task* t) {
   if (!t->status().is_syscall()) {
     return false;
@@ -1261,7 +1260,6 @@ static bool is_in_non_sigreturn_exit_syscall(Task* t) {
   }
   return true;
 }
-#endif
 
 bool is_in_sigreturn_exit_syscall(Task* t) {
   if (!t->status().is_syscall()) {
@@ -1439,7 +1437,7 @@ void Task::did_waitpid(WaitStatus status, bool recurse __attribute__((unused))) 
   // During replay most untraced syscalls are replaced with "xor eax,eax" so
   // rcx is always -1, but during recording it sometimes isn't after we've
   // done a real syscall.
-  if (is_in_rr_page_syscall()) {
+  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page_syscall()) {
     fixup_syscall_registers(registers);
     need_to_set_regs = true;
   }
