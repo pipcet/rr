@@ -13,6 +13,7 @@
 
 #include "ScopedFd.h"
 #include "Ticks.h"
+#include "TicksSource.h"
 
 struct perf_event_attr;
 
@@ -30,12 +31,12 @@ namespace rr {
  * When extra_perf_counters_enabled() returns true, we monitor additional
  * counters of interest.
  */
-class PerfCounters {
+class PerfCounters : public TicksSource {
 public:
   /**
    * Create performance counters monitoring the given task.
    */
-  PerfCounters(pid_t tid);
+  PerfCounters(CpuMicroarch uarch, pid_t tid);
   ~PerfCounters() { stop(); }
 
   void set_tid(pid_t tid);
@@ -74,7 +75,21 @@ public:
   /**
    * Return the fd we last used to monitor the ticks counter.
    */
-  int ticks_fd() const { return fd_ticks.get(); }
+  virtual int ticks_fd() override { return fd_ticks.get(); }
+
+  virtual bool signal(const siginfo_t* si) override
+  {
+    return si->si_signo == PerfCounters::TIME_SLICE_SIGNAL;
+  }
+
+  virtual bool is_time_slice_signal(const siginfo_t* si) override
+  {
+    return si->si_signo == PerfCounters::TIME_SLICE_SIGNAL;
+  }
+
+  virtual void init(AddressSpace*) override {}
+  virtual bool start_with_interval(Ticks);
+  virtual Ticks stop_and_read();
 
   /* This choice is fairly arbitrary; linux doesn't use SIGSTKFLT so we
    * hope that tracees don't either. */

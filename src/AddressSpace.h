@@ -22,6 +22,7 @@
 #include "Monkeypatcher.h"
 #include "PropertyTable.h"
 #include "TaskishUid.h"
+#include "TraceFrame.h"
 #include "TraceStream.h"
 #include "kernel_abi.h"
 #include "remote_code_ptr.h"
@@ -34,6 +35,8 @@ class MonitoredSharedMemory;
 class RecordTask;
 class Session;
 class Task;
+
+struct lwpcb;
 
 /**
  * Records information that the kernel knows about a mapping. This includes
@@ -140,6 +143,7 @@ public:
    */
   bool is_real_device() const { return device() > NO_DEVICE; }
   bool is_vdso() const { return fsname() == "[vdso]"; }
+  bool is_lwp() const { return fsname() == "[lwp]"; }
   bool is_heap() const { return fsname() == "[heap]"; }
   bool is_stack() const { return fsname().find("[stack") == 0; }
   bool is_vvar() const { return fsname() == "[vvar]"; }
@@ -631,8 +635,30 @@ public:
     return rr_page_start() + rr_page_size();
   }
 
+  static remote_ptr<void> rr_page_syscall_end() {
+    return RR_PAGE_LWP_THUNK;
+  }
+
+  static remote_ptr<struct lwpcb> lwpcb_start() {
+    return remote_ptr<struct lwpcb>(rr_page_end().as_int());
+  }
+
+  static uint32_t lwpcb_size() { return 4096; };
+
+  static remote_ptr<unsigned long> lwp_buffer_start() {
+    return remote_ptr<unsigned long>(lwpcb_start().as_int() + lwpcb_size());
+  }
+
+  static uint32_t lwp_buffer_size() { return 8192; };
+
+  static remote_ptr<void> lwp_area_start() {
+    return remote_ptr<void>(rr_page_end().as_int());
+  }
+
+  static uint32_t lwp_area_size() { return lwpcb_size() + lwp_buffer_size(); };
+
   static remote_ptr<void> preload_thread_locals_start() {
-    return rr_page_start() + PAGE_SIZE;
+    return rr_page_start() + 4 * PAGE_SIZE;
   }
   static uint32_t preload_thread_locals_size() {
     return PRELOAD_THREAD_LOCALS_SIZE;

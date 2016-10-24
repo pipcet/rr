@@ -99,7 +99,6 @@ static void init_log_globals() {
   char* env = getenv(log_env);
   if (env) {
     env = strdup(env);
-    assert(env);
     for (int i = 0; env[i]; ++i) {
       env[i] = simple_to_lower(env[i]);
     }
@@ -249,7 +248,7 @@ NewlineTerminatingOstream::~NewlineTerminatingOstream() {
     log_stream() << std::endl;
     flush_log_stream();
     if (Flags::get().fatal_errors_and_warnings && level <= LOG_warn) {
-      abort();
+      //abort();
     }
   }
 }

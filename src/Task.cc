@@ -67,7 +67,6 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       desched_fd_child(-1),
       // This will be initialized when the syscall buffer is.
       cloned_file_data_fd_child(-1),
-      hpc(_tid),
       tid(_tid),
       rec_tid(_rec_tid > 0 ? _rec_tid : _tid),
       syscallbuf_size(0),
@@ -78,6 +77,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       registers(a),
       how_last_execution_resumed(RESUME_CONT),
       is_stopped(false),
+      stopped_prematurely(false),
       seccomp_bpf_enabled(false),
       detected_unexpected_exit(false),
       extra_registers(a),
@@ -86,6 +86,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       top_of_stack(),
       seen_ptrace_exit_event(false),
       expecting_ptrace_interrupt_stop(0) {
+  ts = TicksSource::open(this);
   memset(&thread_locals, 0, sizeof(thread_locals));
 }
 
@@ -780,18 +781,27 @@ void Task::set_debug_status(uintptr_t status) {
 }
 
 TrapReasons Task::compute_trap_reasons() {
+  return compute_trap_reasons(ip(), address_of_last_execution_resume, false);
+}
+
+TrapReasons Task::compute_trap_reasons(remote_code_ptr ip, remote_code_ptr last_ip, bool post_syscall) {
   ASSERT(this, stop_sig() == SIGTRAP);
   TrapReasons reasons;
   uintptr_t status = debug_status();
+
+  if (get_siginfo().si_code == SI_TKILL ||
+      get_siginfo().si_code == SI_USER) {
+    reasons.singlestep = reasons.watchpoint = reasons.breakpoint = false;
+    return reasons;
+  }
 
   // During replay we execute syscall instructions in certain cases, e.g.
   // mprotect with syscallbuf. The kernel does not set DS_SINGLESTEP when we
   // step over those instructions so we need to detect that here.
   if (how_last_execution_resumed == RESUME_SINGLESTEP &&
-      is_at_syscall_instruction(this, address_of_last_execution_resume) &&
-      ip() ==
-          address_of_last_execution_resume +
-              syscall_instruction_length(arch())) {
+      (post_syscall ||
+       (ip == last_ip + syscall_instruction_length(arch()) &&
+        is_at_syscall_instruction(this, last_ip)))) {
     reasons.singlestep = true;
   } else {
     reasons.singlestep = (status & DS_SINGLESTEP) != 0;
@@ -810,14 +820,14 @@ TrapReasons Task::compute_trap_reasons() {
       as->has_any_watchpoint_changes() || (DS_WATCHPOINT_ANY & status);
 
   // If we triggered a breakpoint, this would be the address of the breakpoint
-  remote_code_ptr ip_at_breakpoint = ip().decrement_by_bkpt_insn_length(arch());
+  remote_code_ptr ip_at_breakpoint = ip.decrement_by_bkpt_insn_length(arch());
   // Don't trust siginfo to report execution of a breakpoint if singlestep or
   // watchpoint triggered.
   if (reasons.singlestep) {
     reasons.breakpoint =
-        as->is_breakpoint_instruction(this, address_of_last_execution_resume);
+        as->is_breakpoint_instruction(this, last_ip);
     if (reasons.breakpoint) {
-      ASSERT(this, address_of_last_execution_resume == ip_at_breakpoint);
+      ASSERT(this, last_ip == ip_at_breakpoint);
     }
   } else if (reasons.watchpoint) {
     // We didn't singlestep, so watchpoint state is completely accurate.
@@ -834,8 +844,9 @@ TrapReasons Task::compute_trap_reasons() {
      * at least need to handle that. */
     reasons.breakpoint = SI_KERNEL == si.si_code || TRAP_BRKPT == si.si_code;
     if (reasons.breakpoint) {
-      ASSERT(this, as->is_breakpoint_instruction(this, ip_at_breakpoint))
-          << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
+      reasons.breakpoint = as->is_breakpoint_instruction(this, ip_at_breakpoint);
+      if (!reasons.breakpoint)
+        LOG(debug) << " expected breakpoint at " << ip_at_breakpoint << ", got siginfo "
           << si;
     }
   }
@@ -863,6 +874,10 @@ const Task::ThreadLocals& Task::fetch_preload_thread_locals() {
   return thread_locals;
 }
 
+void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
+                            TicksRequest tick_period, int sig,
+                            bool recurse) {
+  remote_code_ptr resume_ip = ip();
 void Task::activate_preload_thread_locals() {
   // Switch thread-locals to the new task.
   if (tuid() != as->thread_locals_tuid() &&
@@ -878,8 +893,6 @@ void Task::activate_preload_thread_locals() {
   }
 }
 
-void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
-                            TicksRequest tick_period, int sig) {
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
   // Always resetting here, and always to a nonzero number, improves
   // consistency between recording and replay and hopefully
@@ -887,18 +900,48 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   // replay.
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
-    hpc.reset(tick_period == RESUME_UNLIMITED_TICKS
-                  ? 0xffffffff
-                  : max<Ticks>(1, tick_period));
+    // Ensure preload_globals.thread_locals_initialized is up to date. Avoid
+    // unnecessary writes by caching last written value per-AddressSpace.
+    if (preload_globals) {
+      bool* prop = thread_locals_initialized_property.get(*as);
+      if (!prop || *prop != thread_locals_initialized) {
+        write_mem(REMOTE_PTR_FIELD(preload_globals, thread_locals_initialized),
+                  (unsigned char)thread_locals_initialized);
+        if (!prop) {
+          prop = &thread_locals_initialized_property.create(*as);
+        }
+        *prop = thread_locals_initialized;
+      }
+    }
+    if (!recurse) {
+      if (ts->start_with_interval(tick_period == RESUME_UNLIMITED_TICKS
+                                  ? 0xffffff
+                                  : max<Ticks>(1, tick_period))) {
+        address_of_last_execution_resume = resume_ip;
+        how_last_execution_resumed = how;
+        set_debug_status(0);
+        is_stopped = true;
+        stopped_prematurely = (wait_how == RESUME_NONBLOCKING);
+        address_of_last_execution_resume = resume_ip;
+        how_last_execution_resumed = how;
+        set_debug_status(0);
+        extra_registers_known = false;
+
+        return;
+      }
+    }
     activate_preload_thread_locals();
   }
 
+  set_debug_status(0);
   LOG(debug) << "resuming execution of " << tid << " with "
              << ptrace_req_name(how)
              << (sig ? string(", signal ") + signal_name(sig) : string());
   address_of_last_execution_resume = ip();
+  address_of_last_execution_resume = resume_ip;
   how_last_execution_resumed = how;
-  set_debug_status(0);
+  if (!recurse)
+    set_debug_status(0);
 
   pid_t wait_ret = 0;
   if (session().is_recording()) {
@@ -932,9 +975,10 @@ void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
   }
 
   is_stopped = false;
+  stopped_prematurely = false;
   extra_registers_known = false;
   if (RESUME_WAIT == wait_how) {
-    wait();
+    wait(0, recurse);
   }
 }
 
@@ -1141,7 +1185,13 @@ static struct timeval to_timeval(double t) {
   return v;
 }
 
-void Task::wait(double interrupt_after_elapsed) {
+void Task::wait(double interrupt_after_elapsed, bool recurse) {
+  if (is_stopped) {
+    ASSERT(this, stopped_prematurely);
+    stopped_prematurely = false;
+    return;
+  }
+
   LOG(debug) << "going into blocking waitpid(" << tid << ") ...";
   ASSERT(this, !unstable) << "Don't wait for unstable tasks";
   ASSERT(this, session().is_recording() || interrupt_after_elapsed == 0);
@@ -1222,7 +1272,7 @@ void Task::wait(double interrupt_after_elapsed) {
       LOG(warn) << "  PTRACE_INTERRUPT raced with another event " << status;
     }
   }
-  did_waitpid(status);
+  did_waitpid(status, recurse);
 }
 
 static bool is_in_non_sigreturn_exit_syscall(Task* t) {
@@ -1235,6 +1285,18 @@ static bool is_in_non_sigreturn_exit_syscall(Task* t) {
            !is_sigreturn(rt->ev().Syscall().number, t->arch());
   }
   return true;
+}
+
+bool is_in_sigreturn_exit_syscall(Task* t) {
+  if (!t->status().is_syscall()) {
+    return false;
+  }
+  if (t->session().is_recording()) {
+    auto rt = static_cast<RecordTask*>(t);
+    return !rt->ev().is_syscall_event() ||
+           is_sigreturn(rt->ev().Syscall().number, t->arch());
+  }
+  return false;
 }
 
 /**
@@ -1293,11 +1355,18 @@ void Task::emulate_syscall_entry(const Registers& regs) {
   set_regs(r);
 }
 
-void Task::did_waitpid(WaitStatus status) {
-  Ticks more_ticks = hpc.counting ? hpc.read_ticks() : 0;
-  // We stop counting here because there may be things we want to do to the
-  // tracee that would otherwise generate ticks.
-  hpc.stop_counting();
+bool Task::rr_page_mapped()
+{
+  return (fallible_ptrace(PTRACE_PEEKDATA, remote_ptr<void>(0x70001000), nullptr) != -1);
+}
+
+void Task::did_waitpid(WaitStatus status, bool recurse __attribute__((unused))) {
+  wait_status = status;
+
+  Ticks more_ticks = 0;
+  if (!recurse) {
+    more_ticks = ts->stop_and_read();
+  }
   session().accumulate_ticks_processed(more_ticks);
   ticks += more_ticks;
 
@@ -1323,7 +1392,7 @@ void Task::did_waitpid(WaitStatus status) {
       status = WaitStatus::for_stop_sig(PerfCounters::TIME_SLICE_SIGNAL);
       memset(&pending_siginfo, 0, sizeof(pending_siginfo));
       pending_siginfo.si_signo = PerfCounters::TIME_SLICE_SIGNAL;
-      pending_siginfo.si_fd = hpc.ticks_fd();
+      pending_siginfo.si_fd = ts->ticks_fd();
       pending_siginfo.si_code = POLL_IN;
       siginfo_overriden = true;
       expecting_ptrace_interrupt_stop = 0;
@@ -1353,6 +1422,9 @@ void Task::did_waitpid(WaitStatus status) {
   }
 
   is_stopped = true;
+  stopped_prematurely = false;
+  if (did_read_regs)
+    LOG(debug) << "IP " << ip();
   wait_status = status;
   if (ptrace_event() == PTRACE_EVENT_EXIT) {
     seen_ptrace_exit_event = true;
@@ -1391,7 +1463,7 @@ void Task::did_waitpid(WaitStatus status) {
   // During replay most untraced syscalls are replaced with "xor eax,eax" so
   // rcx is always -1, but during recording it sometimes isn't after we've
   // done a real syscall.
-  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page()) {
+  if (is_in_non_sigreturn_exit_syscall(this) || is_in_rr_page_syscall()) {
     fixup_syscall_registers(registers);
     need_to_set_regs = true;
   }
@@ -1402,6 +1474,9 @@ void Task::did_waitpid(WaitStatus status) {
 }
 
 bool Task::try_wait() {
+  if (is_stopped)
+    return true;
+
   int raw_status = 0;
   pid_t ret = waitpid(tid, &raw_status, WNOHANG | __WALL | WSTOPPED);
   ASSERT(this, 0 <= ret) << "waitpid(" << tid << ", NOHANG) failed with "
@@ -1653,8 +1728,9 @@ void Task::copy_state(const CapturedState& state) {
   {
     AutoRemoteSyscalls remote(this);
     {
-      char prname[16];
-      strncpy(prname, state.prname.c_str(), sizeof(prname));
+      char prname[17];
+      strncpy(prname, state.prname.c_str(), sizeof(prname)-1);
+      prname[sizeof(prname)-1] = 0;
       AutoRestoreMem remote_prname(remote, (const uint8_t*)prname,
                                    sizeof(prname));
       LOG(debug) << "    setting name to " << prname;
@@ -1776,10 +1852,6 @@ KernelMapping Task::init_syscall_buffer(AutoRemoteSyscalls& remote,
 void Task::reset_syscallbuf() {
   if (!syscallbuf_child)
     return;
-
-  ASSERT(this, !is_in_untraced_syscall() ||
-                   !read_mem(REMOTE_PTR_FIELD(syscallbuf_child, locked)));
-
   // Memset is easiest to do by using the local mapping which should always
   // exist for the syscallbuf
   uint32_t num_rec =

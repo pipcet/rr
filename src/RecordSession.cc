@@ -498,7 +498,7 @@ void RecordSession::task_continue(const StepState& step_state) {
     ticks_request = RESUME_NO_TICKS;
     resume = RESUME_SYSCALL;
   } else {
-    if (t->has_stashed_sig(PerfCounters::TIME_SLICE_SIGNAL)) {
+    if (t->has_stashed_time_slice_sig()) {
       // timeslice signal already stashed, no point in generating another one
       // (and potentially slow)
       ticks_request = RESUME_UNLIMITED_TICKS;
@@ -577,7 +577,7 @@ static void advance_to_disarm_desched_syscall(RecordTask* t) {
      * reaching the disarm-desched ioctl, so that code is
      * susceptible to receiving TIME_SLICE_SIGNAL. */
     int sig = t->stop_sig();
-    if (PerfCounters::TIME_SLICE_SIGNAL == sig) {
+    if (t->is_time_slice_signal()) {
       continue;
     }
     // We should not receive SYSCALLBUF_DESCHED_SIGNAL since it should already
@@ -1069,10 +1069,11 @@ static bool preinject_signal(RecordTask* t) {
        * later delivery.
        */
       if (t->stop_sig() == SYSCALLBUF_DESCHED_SIGNAL) {
-        LOG(debug) << "    stopped with signal " << signal_name(sig)
+        LOG(debug) << "    stopped with signal " << signal_name(t->stop_sig())
                    << "; ignoring it and carrying on";
+      } else if (t->stop_sig() == SIGTRAP) {
       } else {
-        LOG(debug) << "    stopped with signal " << signal_name(sig)
+        LOG(debug) << "    stopped with signal " << signal_name(t->stop_sig())
                    << "; stashing it and carrying on";
         t->stash_sig();
       }
@@ -1110,8 +1111,6 @@ static bool inject_handled_signal(RecordTask* t) {
   // this code wouldn't work.  This also
   // cross-checks the sighandler information we
   // maintain in |t->sighandlers|.
-  assert(!PerfCounters::extra_perf_counters_enabled() ||
-         0 == t->hpc.read_extra().instructions_retired);
 
   if (t->stop_sig() == SIGSEGV) {
     // Constructing the signal handler frame must have failed. The kernel will

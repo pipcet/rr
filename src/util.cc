@@ -228,7 +228,7 @@ static bool checksum_segment_filter(const AddressSpace::Mapping& m) {
   struct stat st;
   int may_diverge;
 
-  if (m.map.fsname() == "[vsyscall]") {
+  if (m.map.fsname() == "[vsyscall]" || m.map.fsname() == "[lwp]") {
     // This can't be read/checksummed.
     return false;
   }
@@ -484,6 +484,8 @@ signal_action default_action(int sig) {
 
 SignalDeterministic is_deterministic_signal(Task* t) {
   const siginfo_t& si = t->get_siginfo();
+  if (t->is_time_slice_signal(si))
+    return NONDETERMINISTIC_SIG;
   switch (si.si_signo) {
     /* These signals may be delivered deterministically;
      * we'll check for sure below. */

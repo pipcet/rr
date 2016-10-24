@@ -43,6 +43,44 @@ void assert_prerequisites(bool use_syscall_buffer) {
   }
 }
 
+void check_cpuidle_settings() {
+  char buf[] = "/sys/devices/system/cpu/cpu0/cpuidle/state0/disable";
+  char *digit = rindex(buf, '0');
+  for (int i = 0; i < 10; i++) {
+    *digit = '0' + i;
+
+    ScopedFd fd(buf, O_RDONLY);
+    if (0 > fd) {
+      if (i == 0) {
+        LOG(info) << "Unable to check CPU-idle state.";
+      }
+      return;
+    }
+    char state[PATH_MAX];
+    ssize_t nread = read(fd, state, sizeof(state) - 1);
+
+    if (0 > nread) {
+      FATAL() << "Unable to read cpu0's idle state.";
+    }
+    state[nread] = '\0';
+    ssize_t len = strlen(state);
+    if (len > 0) {
+    // Eat the '\n'.
+      state[len-1] = '\0';
+    }
+
+    LOG(info) << "cpu0's idle state " << i << " is " << (state[0] == '1' ? "dis" : "en") << "abled";
+    if (state[0] != '1') {
+      FATAL() << "rr: Error: Your CPU has enabled idle states.  On AMD CPUs,\n"
+        "    this has been found to result in unacceptable interrupt latencies.\n"
+        "\n"
+        "    To disable idle states, you can run the following command:\n"
+        "\n"
+        "    $ sudo cpupower idle-set -D 0\n";
+    }
+  }
+}
+
 void check_performance_settings() {
   if (Flags::get().suppress_environment_warnings) {
     return;
@@ -92,6 +130,8 @@ void check_performance_settings() {
     // clever to enable the 'performance' just for rr, but
     // that seems too hard at the moment.
   }
+
+  //check_cpuidle_settings();
 }
 
 void print_version(FILE* out) { fprintf(out, "rr version %s\n", RR_VERSION); }

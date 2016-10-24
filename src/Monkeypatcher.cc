@@ -428,8 +428,15 @@ static SymbolTable read_vdso_symbols(RecordTask* t) {
  */
 static bool is_kernel_vsyscall(RecordTask* t, remote_ptr<void> addr) {
   uint8_t impl[X86SysenterVsyscallImplementation::size];
+  uint8_t impl2[X86Syscall32VsyscallImplementation::size];
   t->read_bytes(addr, impl);
-  return X86SysenterVsyscallImplementation::match(impl);
+  if (X86SysenterVsyscallImplementation::match(impl))
+    return true;
+  t->read_bytes(addr, impl2);
+  if (X86Syscall32VsyscallImplementation::match(impl2))
+    return true;
+
+  return false;
 }
 
 /**
