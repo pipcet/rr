@@ -5,7 +5,7 @@
 echo Configuring travis-ci build slave ...
 echo The slave is `uname -a`
 
-packages=(rpm ccache cmake make g++-multilib pkg-config realpath zlib1g-dev)
+packages=(rpm ccache cmake make g++-multilib pkg-config realpath zlib1g-dev pexpect)
 
 sudo apt-get update && \
     sudo apt-get install -y "${packages[@]}" && \
