@@ -874,10 +874,6 @@ const Task::ThreadLocals& Task::fetch_preload_thread_locals() {
   return thread_locals;
 }
 
-void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
-                            TicksRequest tick_period, int sig,
-                            bool recurse) {
-  remote_code_ptr resume_ip = ip();
 void Task::activate_preload_thread_locals() {
   // Switch thread-locals to the new task.
   if (tuid() != as->thread_locals_tuid() &&
@@ -893,6 +889,11 @@ void Task::activate_preload_thread_locals() {
   }
 }
 
+void Task::resume_execution(ResumeRequest how, WaitRequest wait_how,
+                            TicksRequest tick_period, int sig,
+                            bool recurse) {
+  remote_code_ptr resume_ip = ip();
+
   // Treat a RESUME_NO_TICKS tick_period as a very large but finite number.
   // Always resetting here, and always to a nonzero number, improves
   // consistency between recording and replay and hopefully
@@ -900,19 +901,6 @@ void Task::activate_preload_thread_locals() {
   // replay.
   // Accumulate any unknown stuff in tick_count().
   if (tick_period != RESUME_NO_TICKS) {
-    // Ensure preload_globals.thread_locals_initialized is up to date. Avoid
-    // unnecessary writes by caching last written value per-AddressSpace.
-    if (preload_globals) {
-      bool* prop = thread_locals_initialized_property.get(*as);
-      if (!prop || *prop != thread_locals_initialized) {
-        write_mem(REMOTE_PTR_FIELD(preload_globals, thread_locals_initialized),
-                  (unsigned char)thread_locals_initialized);
-        if (!prop) {
-          prop = &thread_locals_initialized_property.create(*as);
-        }
-        *prop = thread_locals_initialized;
-      }
-    }
     if (!recurse) {
       if (ts->start_with_interval(tick_period == RESUME_UNLIMITED_TICKS
                                   ? 0xffffff
