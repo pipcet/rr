@@ -607,11 +607,12 @@ Switchable TaskSyscallState::done_preparing_internal(Switchable sw) {
 
   ASSERT(t, scratch >= t->scratch_ptr);
 
-  if (sw == ALLOW_SWITCH && scratch > t->scratch_ptr + t->scratch_size) {
+  if (sw == ALLOW_SWITCH &&
+      scratch > t->scratch_ptr + t->usable_scratch_size()) {
     LOG(warn)
         << "`" << t->syscall_name(t->ev().Syscall().number)
         << "' needed a scratch buffer of size " << scratch - t->scratch_ptr
-        << ", but only " << t->scratch_size
+        << ", but only " << t->usable_scratch_size()
         << " was available.  Disabling context switching: deadlock may follow.";
     switchable = PREVENT_SWITCH;
   }
@@ -2266,6 +2267,9 @@ static void init_scratch_memory(RecordTask* t,
     }
     t->scratch_size = scratch_size;
   }
+
+  t->setup_preload_thread_locals();
+
   // record this mmap for the replay
   Registers r = t->regs();
   uintptr_t saved_result = r.syscall_result();
@@ -3785,7 +3789,8 @@ static void process_execve(RecordTask* t, TaskSyscallState& syscall_state) {
 
   for (auto m : t->vm()->maps()) {
     auto& km = m.map;
-    if (km.start() == AddressSpace::rr_page_start()) {
+    if (km.start() == AddressSpace::rr_page_start() ||
+        km.start() == AddressSpace::preload_thread_locals_start()) {
       continue;
     }
     if (km.is_stack() || km.is_vsyscall()) {
