@@ -105,6 +105,7 @@ private:
   // sample_period; the latter does not ignore ticks in aborted transactions,
   // but does support sample_period.
   ScopedFd fd_ticks_measure;
+  ScopedFd fd_minus_ticks_measure;
   ScopedFd fd_ticks_interrupt;
   ScopedFd fd_ticks_in_transaction;
   ScopedFd fd_useless_counter;

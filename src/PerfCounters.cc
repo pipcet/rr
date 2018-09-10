@@ -31,6 +31,7 @@ namespace rr {
 
 static bool attributes_initialized;
 static struct perf_event_attr ticks_attr;
+static struct perf_event_attr minus_ticks_attr;
 static struct perf_event_attr cycles_attr;
 static struct perf_event_attr hw_interrupts_attr;
 static uint32_t skid_size;
@@ -60,6 +61,7 @@ enum CpuMicroarch {
   IntelSkylake,
   IntelSilvermont,
   IntelKabylake,
+  AMDF15R30,
   AMDRyzen,
 };
 
@@ -67,6 +69,7 @@ struct PmuConfig {
   CpuMicroarch uarch;
   const char* name;
   unsigned rcb_cntr_event;
+  unsigned minus_rcb_cntr_event;
   unsigned hw_intr_cntr_event;
   uint32_t skid_size;
   bool supported;
@@ -80,23 +83,34 @@ struct PmuConfig {
    * performance.
    */
   bool benefits_from_useless_counter;
+  bool has_bugs;
 };
 
 // XXX please only edit this if you really know what you're doing.
 static const PmuConfig pmu_configs[] = {
-  { IntelKabylake, "Intel Kabylake", 0x5101c4, 0x5301cb, 100, true, false },
-  { IntelSilvermont, "Intel Silvermont", 0x517ec4, 0x5301cb, 100, true, true },
-  { IntelSkylake, "Intel Skylake", 0x5101c4, 0x5301cb, 100, true, false },
-  { IntelBroadwell, "Intel Broadwell", 0x5101c4, 0x5301cb, 100, true, false },
-  { IntelHaswell, "Intel Haswell", 0x5101c4, 0x5301cb, 100, true, false },
-  { IntelIvyBridge, "Intel Ivy Bridge", 0x5101c4, 0x5301cb, 100, true, false },
-  { IntelSandyBridge, "Intel Sandy Bridge", 0x5101c4, 0x5301cb, 100, true,
-    false },
-  { IntelNehalem, "Intel Nehalem", 0x5101c4, 0x50011d, 100, true, false },
-  { IntelWestmere, "Intel Westmere", 0x5101c4, 0x50011d, 100, true, false },
-  { IntelPenryn, "Intel Penryn", 0, 0, 100, false, false },
-  { IntelMerom, "Intel Merom", 0, 0, 100, false, false },
-  { AMDRyzen, "AMD Ryzen", 0x5100d1, 0, 1000, true, false },
+  { IntelKabylake, "Intel Kabylake", 0x5101c4, 0, 0x5301cb, 100, true, false,
+    true },
+  { IntelSilvermont, "Intel Silvermont", 0x517ec4, 0, 0x5301cb, 100, true, true,
+    true },
+  { IntelSkylake, "Intel Skylake", 0x5101c4, 0, 0x5301cb, 100, true, false,
+    true },
+  { IntelBroadwell, "Intel Broadwell", 0x5101c4, 0, 0x5301cb, 100, true, false,
+    true },
+  { IntelHaswell, "Intel Haswell", 0x5101c4, 0, 0x5301cb, 100, true, false,
+    true },
+  { IntelIvyBridge, "Intel Ivy Bridge", 0x5101c4, 0, 0x5301cb, 100, true, false,
+    true },
+  { IntelSandyBridge, "Intel Sandy Bridge", 0x5101c4, 0, 0x5301cb, 100, true,
+    false, true },
+  { IntelNehalem, "Intel Nehalem", 0x5101c4, 0, 0x50011d, 100, true, false,
+    true },
+  { IntelWestmere, "Intel Westmere", 0x5101c4, 0, 0x50011d, 100, true, false,
+    true },
+  { IntelPenryn, "Intel Penryn", 0, 0, 0, 100, false, false, true },
+  { IntelMerom, "Intel Merom", 0, 0, 0, 100, false, false, true },
+  { AMDF15R30, "AMD Family 15h Revision 30h", 0xc4, 0xc6, 0, 2000, true, false,
+    true },
+  { AMDRyzen, "AMD Ryzen", 0x5100d1, 0, 0, 1000, true, false, true },
 };
 
 static string lowercase(const string& s) {
@@ -179,6 +193,8 @@ static CpuMicroarch get_cpu_microarch() {
     case 0x806e0:
     case 0x906e0:
       return IntelKabylake;
+    case 0x30f00:
+      return AMDF15R30;
     case 0x00f10:
       if (ext_family == 8) {
         if (!Flags::get().suppress_environment_warnings) {
@@ -548,6 +564,9 @@ static void init_attributes() {
 
   skid_size = pmu->skid_size;
   init_perf_event_attr(&ticks_attr, PERF_TYPE_RAW, pmu->rcb_cntr_event);
+  if (pmu->minus_rcb_cntr_event != 0)
+    init_perf_event_attr(&minus_ticks_attr, PERF_TYPE_RAW,
+                         pmu->minus_rcb_cntr_event);
   init_perf_event_attr(&cycles_attr, PERF_TYPE_HARDWARE,
                        PERF_COUNT_HW_CPU_CYCLES);
   init_perf_event_attr(&hw_interrupts_attr, PERF_TYPE_RAW,
@@ -556,7 +575,8 @@ static void init_attributes() {
   // same thing.  Unclear if necessary.
   hw_interrupts_attr.exclude_hv = 1;
 
-  check_for_bugs();
+  if (pmu->has_bugs)
+    check_for_bugs();
   /*
    * For maintainability, and since it doesn't impact performance when not
    * needed, we always activate this. If it ever turns out to be a problem,
@@ -614,8 +634,11 @@ void PerfCounters::reset(Ticks ticks_period) {
     LOG(debug) << "Recreating counters with period " << ticks_period;
 
     struct perf_event_attr attr = rr::ticks_attr;
+    struct perf_event_attr minus_attr = rr::minus_ticks_attr;
     attr.sample_period = ticks_period;
     fd_ticks_interrupt = start_counter(tid, -1, &attr);
+    if (minus_attr.config != 0)
+      fd_minus_ticks_measure = start_counter(tid, fd_ticks_interrupt, &minus_attr);
 
     if (!only_one_counter && supports_txcp) {
       if (has_kvm_in_txcp_bug) {
@@ -671,6 +694,14 @@ void PerfCounters::reset(Ticks ticks_period) {
     if (ioctl(fd_ticks_interrupt, PERF_EVENT_IOC_ENABLE, 0)) {
       FATAL() << "ioctl(PERF_EVENT_IOC_ENABLE) failed";
     }
+    if (fd_minus_ticks_measure.is_open()) {
+      if (ioctl(fd_minus_ticks_measure, PERF_EVENT_IOC_RESET, 0)) {
+        FATAL() << "ioctl(PERF_EVENT_IOC_RESET) failed";
+      }
+      if (ioctl(fd_minus_ticks_measure, PERF_EVENT_IOC_ENABLE, 0)) {
+        FATAL() << "ioctl(PERF_EVENT_IOC_ENABLE) failed";
+      }
+    }
     if (fd_ticks_measure.is_open()) {
       if (ioctl(fd_ticks_measure, PERF_EVENT_IOC_RESET, 0)) {
         FATAL() << "ioctl(PERF_EVENT_IOC_RESET) failed";
@@ -707,6 +738,7 @@ void PerfCounters::stop() {
 
   fd_ticks_interrupt.close();
   fd_ticks_measure.close();
+  fd_minus_ticks_measure.close();
   fd_useless_counter.close();
   fd_ticks_in_transaction.close();
 }
@@ -720,6 +752,9 @@ void PerfCounters::stop_counting() {
     stop();
   } else {
     ioctl(fd_ticks_interrupt, PERF_EVENT_IOC_DISABLE, 0);
+    if (fd_minus_ticks_measure.is_open()) {
+      ioctl(fd_minus_ticks_measure, PERF_EVENT_IOC_DISABLE, 0);
+    }
     if (fd_ticks_measure.is_open()) {
       ioctl(fd_ticks_measure, PERF_EVENT_IOC_DISABLE, 0);
     }
@@ -755,6 +790,10 @@ Ticks PerfCounters::read_ticks(Task* t) {
       (t->session().is_recording() ? recording_skid_size() : skid_size());
   uint64_t interrupt_val = read_counter(fd_ticks_interrupt);
   if (!fd_ticks_measure.is_open()) {
+    if (fd_minus_ticks_measure.is_open()) {
+      uint64_t minus_measure_val = read_counter(fd_minus_ticks_measure);
+      interrupt_val -= minus_measure_val;
+    }
     ASSERT(t, !counting_period || interrupt_val <= adjusted_counting_period)
         << "Detected " << interrupt_val << " ticks, expected no more than "
         << adjusted_counting_period;
