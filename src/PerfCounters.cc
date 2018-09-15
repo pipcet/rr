@@ -108,7 +108,7 @@ static const PmuConfig pmu_configs[] = {
     true },
   { IntelPenryn, "Intel Penryn", 0, 0, 0, 100, false, false, true },
   { IntelMerom, "Intel Merom", 0, 0, 0, 100, false, false, true },
-  { AMDF15R30, "AMD Family 15h Revision 30h", 0xc4, 0xc6, 0, 2000, true, false,
+  { AMDF15R30, "AMD Family 15h Revision 30h", 0xc4, 0xc6, 0, 250, true, false,
     true },
   { AMDRyzen, "AMD Ryzen", 0x5100d1, 0, 0, 1000, true, false, true },
 };
@@ -595,7 +595,11 @@ bool PerfCounters::is_ticks_attr(const perf_event_attr& attr) {
   perf_event_attr tmp_attr = attr;
   tmp_attr.sample_period = 0;
   tmp_attr.config &= ~IN_TXCP;
-  return memcmp(&ticks_attr, &tmp_attr, sizeof(attr)) == 0;
+  if (memcmp(&ticks_attr, &tmp_attr, sizeof(attr)) == 0)
+    return true;
+  if (memcmp(&minus_ticks_attr, &tmp_attr, sizeof(attr)) == 0)
+    return true;
+  return false;
 }
 
 uint32_t PerfCounters::skid_size() {

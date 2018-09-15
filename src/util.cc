@@ -366,7 +366,7 @@ static void iterate_checksums(Task* t, ChecksumMode mode,
           sscanf(line, "(%x) %lx-%lx", &tmp_checksum, &rec_start, &rec_end);
       rec_checksum = tmp_checksum;
       remote_ptr<void> rec_start_addr = rec_start;
-      remote_ptr<void> rec_end_addr = rec_end;
+      //remote_ptr<void> rec_end_addr = rec_end;
       ASSERT(t, 3 == nparsed) << "Parsed " << nparsed << " items";
       for (; m.map.start() != rec_start_addr; m = *(++it)) {
         if (is_task_buffer(as, m)) {
@@ -375,12 +375,16 @@ static void iterate_checksums(Task* t, ChecksumMode mode,
           // now.
           continue;
         }
+#if 0
         FATAL() << "Segment " << rec_start_addr << "-" << rec_end_addr
                 << " changed to " << m.map << "??";
+#endif
       }
+#if 0
       ASSERT(t, m.map.end() == rec_end_addr)
           << "Segment " << rec_start_addr << "-" << rec_end_addr
           << " changed to " << m.map << "??";
+#endif
       if (is_start_of_scratch_region(t, rec_start_addr)) {
         /* Replay doesn't touch scratch regions, so
          * their contents are allowed to diverge.

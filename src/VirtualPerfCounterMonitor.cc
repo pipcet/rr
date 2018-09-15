@@ -32,6 +32,11 @@ VirtualPerfCounterMonitor::VirtualPerfCounterMonitor(
       sig(0),
       enabled(false) {
   ASSERT(t, should_virtualize(attr));
+  if ((attr.config & 0xff) == 0xc6) {
+    pmctype_ = VPMC_ZERO;
+  } else {
+    pmctype_ = VPMC_TICKS;
+  }
   if (t->session().is_recording()) {
     maybe_enable_interrupt(t, attr.sample_period);
   }
@@ -120,7 +125,15 @@ bool VirtualPerfCounterMonitor::emulate_read(RecordTask* t,
                                              LazyOffset&, uint64_t* result) {
   RecordTask* target = t->session().find_task(target_tuid());
   if (target) {
-    int64_t val = target->tick_count() - initial_ticks;
+    int64_t val;
+    switch (pmctype_) {
+    case VPMC_TICKS:
+      val = target->tick_count() - initial_ticks;
+      break;
+    case VPMC_ZERO:
+      val = 0;
+      break;
+    }
     *result = write_ranges(t, ranges, &val, sizeof(val));
   } else {
     *result = 0;

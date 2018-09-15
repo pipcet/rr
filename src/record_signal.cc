@@ -256,6 +256,7 @@ bool handle_syscallbuf_breakpoint(RecordTask* t) {
     Registers r = t->regs();
     r.set_ip(get_stub_scratch_1(t));
     t->set_regs(r);
+    t->ticks++;
 
     restore_sighandler_if_not_default(t, SIGTRAP);
     // Now we're back in application code so any pending stashed signals
