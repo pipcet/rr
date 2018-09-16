@@ -27,52 +27,15 @@ int main(int argc, char** argv) {
 
   /* Test that checksumming doesn't care if we have a mmap
    * that is not backed by a sufficiently long file */
-  size_t page_size = sysconf(_SC_PAGESIZE);
   static const char name[] = "temp";
   int fd = open(name, O_CREAT | O_RDWR | O_EXCL, 0600);
   /* Have it extend a couple of bytes into the second page */
-  test_assert(0 == ftruncate(fd, page_size + 200));
+  test_assert(0 == ftruncate(fd, 35808));
   void* map_addr =
-      mmap(NULL, 4 * page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-  test_assert(MAP_FAILED != map_addr);
-  /* Make the second and third page PROT_NONE */
-  test_assert(0 == mprotect(map_addr + page_size, 2 * page_size, PROT_NONE));
-  /* Just some syscall to get some additional checksums in */
-  (void)geteuid();
-  test_assert(0 == unlink(name));
-
-  /* The same again, but this time unmap the two pages in the middle */
-  static const char name2[] = "temp2";
-  fd = open(name2, O_CREAT | O_RDWR | O_EXCL, 0600);
-  /* Have it extend a couple of bytes into the second page */
-  test_assert(0 == ftruncate(fd, page_size + 200));
-  map_addr =
-      mmap(NULL, 4 * page_size, PROT_READ | PROT_WRITE, MAP_PRIVATE, fd, 0);
-  test_assert(MAP_FAILED != map_addr);
-  test_assert(0 == munmap(map_addr + page_size, 2 * page_size));
-  test_assert(0 == unlink(name2));
-
-  /* Now map two temporary files right next to each other to make sure they're
-     not getting coralesced, causing trouble for the checksumming */
-  static const char name3[] = "temp3";
-  fd = open(name3, O_CREAT | O_RDWR | O_EXCL, 0600);
-  static const char name4[] = "temp4";
-  int fd2 = open(name4, O_CREAT | O_RDWR | O_EXCL, 0600);
-  ftruncate(fd, page_size);
-  ftruncate(fd2, page_size);
-
-  // Alloc a 2 page region first, then overwrite it.
-  map_addr =
-      mmap(NULL, 2 * page_size, PROT_NONE, MAP_PRIVATE | MAP_ANONYMOUS, 0, 0);
-  test_assert(MAP_FAILED != map_addr);
-  test_assert(MAP_FAILED != mmap(map_addr, page_size, PROT_NONE,
-                                 MAP_PRIVATE | MAP_FIXED, fd, 0));
-  test_assert(MAP_FAILED != mmap(map_addr + page_size, page_size, PROT_NONE,
-                                 MAP_PRIVATE | MAP_FIXED, fd2, 0));
-  (void)geteuid();
-  test_assert(0 == unlink(name3));
-  test_assert(0 == unlink(name4));
-
+      mmap(NULL, 39904, PROT_READ, MAP_DENYWRITE|MAP_PRIVATE, fd, 0);
+  mmap(map_addr + 0x2000, 16384, PROT_READ|PROT_EXEC, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x2000);
+  mmap(map_addr + 0x6000, 8192, PROT_READ, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x6000);
+  mmap(map_addr + 0x8000, 8192, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_FIXED|MAP_DENYWRITE, 3, 0x7000);
   atomic_puts("EXIT-SUCCESS");
   return 0;
 }
