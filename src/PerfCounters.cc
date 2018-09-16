@@ -602,6 +602,14 @@ bool PerfCounters::is_ticks_attr(const perf_event_attr& attr) {
   if (memcmp(&ticks_attr, &tmp_attr, sizeof(attr)) == 0) {
     return true;
   }
+  return false;
+}
+
+bool PerfCounters::is_minus_ticks_attr(const perf_event_attr& attr) {
+  init_attributes();
+  perf_event_attr tmp_attr = attr;
+  tmp_attr.sample_period = 0;
+  tmp_attr.config &= ~IN_TXCP;
   if (memcmp(&minus_ticks_attr, &tmp_attr, sizeof(attr)) == 0) {
     return true;
   }

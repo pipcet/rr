@@ -88,6 +88,7 @@ public:
   enum { TIME_SLICE_SIGNAL = SIGSTKFLT };
 
   static bool is_ticks_attr(const perf_event_attr& attr);
+  static bool is_minus_ticks_attr(const perf_event_attr& attr);
 
   /**
    * When an interrupt is requested, at most this many ticks may elapse before

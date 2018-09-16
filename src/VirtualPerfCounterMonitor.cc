@@ -20,7 +20,12 @@ std::map<TaskUid, VirtualPerfCounterMonitor*>
 
 bool VirtualPerfCounterMonitor::should_virtualize(
     const struct perf_event_attr& attr) {
-  return PerfCounters::is_ticks_attr(attr);
+  return PerfCounters::is_ticks_attr(attr) || PerfCounters::is_minus_ticks_attr(attr);
+}
+
+VirtualPerfCounterType VirtualPerfCounterMonitor::virtualization_type(
+    const struct perf_event_attr& attr) {
+  return PerfCounters::is_ticks_attr(attr) ? VPMC_TICKS : VPMC_ZERO;
 }
 
 VirtualPerfCounterMonitor::VirtualPerfCounterMonitor(
@@ -32,11 +37,7 @@ VirtualPerfCounterMonitor::VirtualPerfCounterMonitor(
       sig(0),
       enabled(false) {
   ASSERT(t, should_virtualize(attr));
-  if ((attr.config & 0xff) == 0xc6) {
-    pmctype_ = VPMC_ZERO;
-  } else {
-    pmctype_ = VPMC_TICKS;
-  }
+  pmctype_ = virtualization_type(attr);
   if (t->session().is_recording()) {
     maybe_enable_interrupt(t, attr.sample_period);
   }
