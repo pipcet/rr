@@ -67,6 +67,12 @@ public:
   void stop_counting();
 
   /**
+   * Return the number of ticks we need for an emulated branch.
+   * `t` is used for debugging purposes.
+   */
+  static Ticks ticks_for_branch(Task* t);
+
+  /**
    * Read the current value of the ticks counter.
    * `t` is used for debugging purposes.
    */

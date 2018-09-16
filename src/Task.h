@@ -237,6 +237,11 @@ public:
   remote_code_ptr ip() { return regs().ip(); }
 
   /**
+   * Emulate a jump to a new IP, updating the ticks counter as appropriate.
+   */
+  void emulate_jump(remote_code_ptr);
+
+  /**
    * Return true if this is at an arm-desched-event or
    * disarm-desched-event syscall.
    */
@@ -972,9 +977,7 @@ protected:
   std::string prname;
   // Count of all ticks seen by this task since tracees became
   // consistent and the task last wait()ed.
-public:
   Ticks ticks;
-protected:
   // When |is_stopped|, these are our child registers.
   Registers registers;
   // Where we last resumed execution
