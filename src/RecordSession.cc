@@ -599,7 +599,7 @@ void RecordSession::task_continue(const StepState& step_state) {
   }
 
   TicksRequest ticks_request;
-  ResumeRequest resume;
+  ResumeRequest resume = RESUME_CONT;
   if (step_state.continue_type == CONTINUE_SYSCALL) {
     ticks_request = RESUME_NO_TICKS;
     resume = RESUME_SYSCALL;
@@ -612,63 +612,66 @@ void RecordSession::task_continue(const StepState& step_state) {
       ticks_request = (TicksRequest)max<Ticks>(
           0, scheduler().current_timeslice_end() - t->tick_count());
     }
+  }
 
-    // Clear any lingering state, then see if we need to stop earlier for a
-    // tracee-requested pmc interrupt on the virtualized performance counter.
-    t->next_pmc_interrupt_is_for_user = false;
-    if (auto vpmc =
-            VirtualPerfCounterMonitor::interrupting_virtual_pmc_for_task(t)) {
-      ASSERT(t, vpmc->target_tuid() == t->tuid());
+  bool singlestep =
+    t->emulated_ptrace_cont_command == PTRACE_SINGLESTEP ||
+    t->emulated_ptrace_cont_command == PTRACE_SYSEMU_SINGLESTEP;
+  // Clear any lingering state, then see if we need to stop earlier for a
+  // tracee-requested pmc interrupt on the virtualized performance counter.
+  t->next_pmc_interrupt_is_for_user = false;
+  if (auto vpmc =
+      VirtualPerfCounterMonitor::interrupting_virtual_pmc_for_task(t, false)) {
+    ASSERT(t, vpmc->target_tuid() == t->tuid());
 
-      Ticks after = max<Ticks>(vpmc->target_ticks() - t->tick_count(), 0);
-      if ((uint64_t)after < (uint64_t)ticks_request) {
-        LOG(debug) << "ticks_request constrained from " << ticks_request
-                   << " to " << after << " for vpmc";
+    Ticks after = max<Ticks>(vpmc->target_ticks() - t->tick_count(), 0);
+    LOG(debug) << "ticks_request constrained from " << ticks_request
+               << " to " << after << " for vpmc";
+    if ((uint64_t)after < (uint64_t)ticks_request) {
+      if (after > PerfCounters::skid_size()) {
+        after -= PerfCounters::skid_size();
         ticks_request = (TicksRequest)after;
-        t->next_pmc_interrupt_is_for_user = true;
-      }
-    }
-
-    bool singlestep =
-        t->emulated_ptrace_cont_command == PTRACE_SINGLESTEP ||
-        t->emulated_ptrace_cont_command == PTRACE_SYSEMU_SINGLESTEP;
-    if (singlestep && is_at_syscall_instruction(t, t->ip())) {
-      // We're about to singlestep into a syscall instruction.
-      // Act like we're NOT singlestepping since doing a PTRACE_SINGLESTEP would
-      // skip over the system call.
-      LOG(debug)
-          << "Clearing singlestep because we're about to enter a syscall";
-      singlestep = false;
-    }
-    if (singlestep) {
-      resume = RESUME_SINGLESTEP;
-    } else {
-      /* We won't receive PTRACE_EVENT_SECCOMP events until
-       * the seccomp filter is installed by the
-       * syscall_buffer lib in the child, therefore we must
-       * record in the traditional way (with PTRACE_SYSCALL)
-       * until it is installed. */
-      /* Kernel commit
-         https://github.com/torvalds/linux/commit/93e35efb8de45393cf61ed07f7b407629bf698ea
-         makes PTRACE_SYSCALL traps be delivered *before* seccomp RET_TRACE
-         traps.
-         Detect and handle this. */
-      if (!t->seccomp_bpf_enabled || may_restart ||
-          syscall_seccomp_ordering_ == PTRACE_SYSCALL_BEFORE_SECCOMP_UNKNOWN) {
-        resume = RESUME_SYSCALL;
       } else {
-        /* When the seccomp filter is on, instead of capturing
-         * syscalls by using PTRACE_SYSCALL, the filter will
-         * generate the ptrace events. This means we allow the
-         * process to run using PTRACE_CONT, and rely on the
-         * seccomp filter to generate the special
-         * PTRACE_EVENT_SECCOMP event once a syscall happens.
-         * This event is handled here by simply allowing the
-         * process to continue to the actual entry point of
-         * the syscall (using cont_syscall_block()) and then
-         * using the same logic as before. */
-        resume = RESUME_CONT;
+        singlestep = true;
+        ticks_request = TicksRequest(1);
       }
+      t->next_pmc_interrupt_is_for_user = true;
+    }
+  }
+  /* When the seccomp filter is on, instead of capturing
+   * syscalls by using PTRACE_SYSCALL, the filter will
+   * generate the ptrace events. This means we allow the
+   * process to run using PTRACE_CONT, and rely on the
+   * seccomp filter to generate the special
+   * PTRACE_EVENT_SECCOMP event once a syscall happens.
+   * This event is handled here by simply allowing the
+   * process to continue to the actual entry point of
+   * the syscall (using cont_syscall_block()) and then
+   * using the same logic as before. */
+  if (singlestep && is_at_syscall_instruction(t, t->ip())) {
+    // We're about to singlestep into a syscall instruction.
+    // Act like we're NOT singlestepping since doing a PTRACE_SINGLESTEP would
+    // skip over the system call.
+    LOG(debug)
+      << "Clearing singlestep because we're about to enter a syscall";
+    singlestep = false;
+  }
+  if (singlestep) {
+    resume = RESUME_SINGLESTEP;
+  } else {
+    /* We won't receive PTRACE_EVENT_SECCOMP events until
+     * the seccomp filter is installed by the
+     * syscall_buffer lib in the child, therefore we must
+     * record in the traditional way (with PTRACE_SYSCALL)
+     * until it is installed. */
+    /* Kernel commit
+       https://github.com/torvalds/linux/commit/93e35efb8de45393cf61ed07f7b407629bf698ea
+       makes PTRACE_SYSCALL traps be delivered *before* seccomp RET_TRACE
+       traps.
+       Detect and handle this. */
+    if (!t->seccomp_bpf_enabled || may_restart ||
+        syscall_seccomp_ordering_ == PTRACE_SYSCALL_BEFORE_SECCOMP_UNKNOWN) {
+      resume = RESUME_SYSCALL;
     }
   }
   t->resume_execution(resume, RESUME_NONBLOCKING, ticks_request);
@@ -1509,14 +1512,14 @@ bool RecordSession::handle_signal_event(RecordTask* t, StepState* step_state) {
   if (sig == PerfCounters::TIME_SLICE_SIGNAL) {
     if (t->next_pmc_interrupt_is_for_user) {
       auto vpmc =
-          VirtualPerfCounterMonitor::interrupting_virtual_pmc_for_task(t);
-      ASSERT(t, vpmc);
+        VirtualPerfCounterMonitor::interrupting_virtual_pmc_for_task(t, true);
+      if (vpmc) {
+        // Synthesize the requested signal.
+        vpmc->synthesize_signal(t);
 
-      // Synthesize the requested signal.
-      vpmc->synthesize_signal(t);
-
-      t->next_pmc_interrupt_is_for_user = false;
-      return true;
+        t->next_pmc_interrupt_is_for_user = false;
+        return true;
+      }
     }
 
     auto& si = t->get_siginfo();

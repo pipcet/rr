@@ -10,10 +10,6 @@ struct perf_event_attr;
 
 namespace rr {
 
-enum VirtualPerfCounterType {
-  VPMC_TICKS,
-  VPMC_ZERO,
-};
 /**
  * A FileMonitor to virtualize the performance counter that rr uses to count
  * ticks. Note that this doesn't support interrupts yet so recording rr replays
@@ -22,7 +18,6 @@ enum VirtualPerfCounterType {
 class VirtualPerfCounterMonitor : public FileMonitor {
 public:
   static bool should_virtualize(const struct perf_event_attr& attr);
-  static VirtualPerfCounterType virtualization_type(const struct perf_event_attr& attr);
 
   VirtualPerfCounterMonitor(Task* t, Task* target,
                             const struct perf_event_attr& attr);
@@ -46,13 +41,12 @@ public:
     return t->si_errno == VIRTUAL_PERF_COUNTER_SIGNAL_SI_ERRNO;
   }
 
-  static VirtualPerfCounterMonitor* interrupting_virtual_pmc_for_task(Task* t);
+  static VirtualPerfCounterMonitor* interrupting_virtual_pmc_for_task(Task* t, bool);
 
 private:
   void maybe_enable_interrupt(Task* t, uint64_t after);
   void disable_interrupt() const;
 
-  VirtualPerfCounterType pmctype_;
   Ticks initial_ticks;
   Ticks target_ticks_;
   TaskUid target_tuid_;
