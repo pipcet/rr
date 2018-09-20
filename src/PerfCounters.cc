@@ -64,7 +64,7 @@ enum CpuMicroarch {
   IntelSkylake,
   IntelSilvermont,
   IntelKabylake,
-  AMDF15R30,
+  AMDC4MINUSC6,
   AMDRyzen,
 };
 
@@ -113,7 +113,7 @@ static const PmuConfig pmu_configs[] = {
   { IntelWestmere, "Intel Westmere", 0x5101c4, 0, 0x50011d, 100, 0 },
   { IntelPenryn, "Intel Penryn", 0, 0, 0, 100, PMU_UNSUPPORTED },
   { IntelMerom, "Intel Merom", 0, 0, 0, 100, PMU_UNSUPPORTED },
-  { AMDF15R30, "AMD Family 15h Revision 30h", 0xc4, 0xc6, 0, 250,
+  { AMDC4MINUSC6, "AMD with PMCs C4 and C6", 0xc4, 0xc6, 0, 250,
     PMU_UNCONDITIONAL_INDIRECT_BRANCH_ADDS_TICK |
     PMU_SKIP_INTEL_BUG_CHECK },
   { AMDRyzen, "AMD Ryzen", 0x5100d1, 0, 0, 1000, 0 },
@@ -202,7 +202,7 @@ static CpuMicroarch get_cpu_microarch() {
     case 0x906e0:
       return IntelKabylake;
     case 0x30f00:
-      return AMDF15R30;
+      return AMDC4MINUSC6;
     case 0x00f10:
       if (ext_family == 8) {
         if (!Flags::get().suppress_environment_warnings) {
@@ -220,10 +220,15 @@ static CpuMicroarch get_cpu_microarch() {
   }
 
   if (!strcmp(vendor, "AuthenticAMD")) {
-    CLEAN_FATAL()
-        << "AMD CPUs not supported.\n"
-        << "For Ryzen, see https://github.com/mozilla/rr/issues/2034.\n"
-        << "For post-Ryzen CPUs, please file a Github issue.";
+    if (!Flags::get().suppress_environment_warnings) {
+      fprintf(stderr, "You have an AMD CPU which has not "
+              "previously been tested; rr is likely\n"
+              "to be unreliable or fail completely. Please "
+              "report your experiences at\n"
+              "https://github.com/mozilla/rr/issues/2034, citing your\n"
+              "CPU identifier, %x.\n", cpu_type);
+    }
+    return AMDC4MINUSC6;
   } else {
     CLEAN_FATAL() << "Intel CPU type " << HEX(cpu_type) << " unknown";
   }
