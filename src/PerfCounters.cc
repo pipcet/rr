@@ -536,6 +536,10 @@ void PerfCounters::check_for_bugs() {
   check_working_counters();
 }
 
+bool PerfCounters::skip_cpuid_bug_check() {
+  return pmu_flags & PMU_SKIP_INTEL_BUG_CHECK;
+}
+
 void PerfCounters::init_attributes() {
   if (running_under_rr()) {
     init_perf_event_attr(&ticks_attr, PERF_TYPE_HARDWARE, PERF_COUNT_RR);
