@@ -18,20 +18,21 @@ std::map<TaskUid, VirtualPerfCounterMonitor*>
     VirtualPerfCounterMonitor::tasks_with_interrupts =
         std::map<TaskUid, VirtualPerfCounterMonitor*>();
 
-bool VirtualPerfCounterMonitor::should_virtualize(
-    const struct perf_event_attr& attr) {
-  return PerfCounters::is_rr_ticks_attr(attr);
+bool VirtualPerfCounterMonitor::should_virtualize_perf_event_open(
+    PerfCounters& hpc, const struct perf_event_attr& attr) {
+  return hpc.is_rr_ticks_attr(attr);
 }
 
 VirtualPerfCounterMonitor::VirtualPerfCounterMonitor(
     Task* t, Task* target, const struct perf_event_attr& attr)
-    : initial_ticks(target->tick_count()),
+    : task(t),
+      initial_ticks(target->tick_count()),
       target_tuid_(target->tuid()),
       owner_tid(0),
       flags(0),
       sig(0),
       enabled(false) {
-  ASSERT(t, should_virtualize(attr));
+  ASSERT(t, t->should_virtualize_perf_event_open(attr));
   if (t->session().is_recording()) {
     maybe_enable_interrupt(t, attr.sample_period);
   }

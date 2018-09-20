@@ -31,20 +31,6 @@ namespace rr {
 
 #define PERF_COUNT_RR 0x72727272L
 
-static bool attributes_initialized;
-static struct perf_event_attr ticks_attr;
-static struct perf_event_attr minus_ticks_attr;
-static struct perf_event_attr cycles_attr;
-static struct perf_event_attr hw_interrupts_attr;
-static uint32_t pmu_flags;
-static uint32_t skid_size;
-static bool has_ioc_period_bug;
-static bool has_kvm_in_txcp_bug;
-static bool has_xen_pmi_bug;
-static bool supports_txcp;
-static bool only_one_counter;
-static bool activate_useless_counter;
-
 /*
  * Find out the cpu model using the cpuid instruction.
  * Full list of CPUIDs at http://sandpile.org/x86/cpuid.htm
@@ -252,9 +238,9 @@ static int64_t read_counter(ScopedFd& fd) {
   return val;
 }
 
-static ScopedFd start_counter(pid_t tid, int group_fd,
-                              struct perf_event_attr* attr,
-                              bool* disabled_txcp = nullptr) {
+ScopedFd PerfCounters::start_counter(pid_t tid, int group_fd,
+                                     struct perf_event_attr* attr,
+                                     bool* disabled_txcp = nullptr) {
   if (disabled_txcp) {
     *disabled_txcp = false;
   }
@@ -294,9 +280,9 @@ static ScopedFd start_counter(pid_t tid, int group_fd,
   return fd;
 }
 
-static void check_for_ioc_period_bug() {
+void PerfCounters::check_for_ioc_period_bug() {
   // Start a cycles counter
-  struct perf_event_attr attr = rr::ticks_attr;
+  struct perf_event_attr attr = ticks_attr;
   attr.sample_period = 0xffffffff;
   attr.exclude_kernel = 1;
   ScopedFd bug_fd = start_counter(0, -1, &attr);
@@ -328,9 +314,9 @@ static void do_branches() {
   accumulator_sink = accumulator;
 }
 
-static void check_for_kvm_in_txcp_bug() {
+void PerfCounters::check_for_kvm_in_txcp_bug() {
   int64_t count = 0;
-  struct perf_event_attr attr = rr::ticks_attr;
+  struct perf_event_attr attr = ticks_attr;
   attr.config |= IN_TXCP;
   attr.sample_period = 0;
   bool disabled_txcp;
@@ -349,9 +335,9 @@ static void check_for_kvm_in_txcp_bug() {
              << " count=" << count;
 }
 
-static void check_for_xen_pmi_bug() {
+void PerfCounters::check_for_xen_pmi_bug() {
   int32_t count = -1;
-  struct perf_event_attr attr = rr::ticks_attr;
+  struct perf_event_attr attr = ticks_attr;
   attr.sample_period = NUM_BRANCHES - 1;
   ScopedFd fd = start_counter(0, -1, &attr);
   if (fd.is_open()) {
@@ -492,10 +478,10 @@ static void check_for_xen_pmi_bug() {
   }
 }
 
-static void check_working_counters() {
-  struct perf_event_attr attr = rr::ticks_attr;
+void PerfCounters::check_working_counters() {
+  struct perf_event_attr attr = ticks_attr;
   attr.sample_period = 0;
-  struct perf_event_attr attr2 = rr::cycles_attr;
+  struct perf_event_attr attr2 = cycles_attr;
   attr.sample_period = 0;
   ScopedFd fd = start_counter(0, -1, &attr);
   ScopedFd fd2 = start_counter(0, -1, &attr2);
@@ -537,7 +523,7 @@ static void check_working_counters() {
   }
 }
 
-static void check_for_bugs() {
+void PerfCounters::check_for_bugs() {
   if (running_under_rr()) {
     // Under rr we emulate idealized performance counters, so we can assume
     // none of the bugs apply.
@@ -550,15 +536,13 @@ static void check_for_bugs() {
   check_working_counters();
 }
 
-static void init_attributes() {
-  if (attributes_initialized) {
-    return;
-  }
-  attributes_initialized = true;
-
+void PerfCounters::init_attributes() {
   if (running_under_rr()) {
     init_perf_event_attr(&ticks_attr, PERF_TYPE_HARDWARE, PERF_COUNT_RR);
-    rr::skid_size = RR_SKID_MAX;
+    minus_ticks_attr = {};
+    cycles_attr = {};
+    hw_interrupts_attr = {};
+    skid_size_ = RR_SKID_MAX;
   } else {
     CpuMicroarch uarch = get_cpu_microarch();
     const PmuConfig* pmu = nullptr;
@@ -574,7 +558,7 @@ static void init_attributes() {
       FATAL() << "Microarchitecture `" << pmu->name << "' currently unsupported.";
     }
 
-    skid_size = pmu->skid_size;
+    skid_size_ = pmu->skid_size;
     pmu_flags = pmu->flags;
     init_perf_event_attr(&ticks_attr, PERF_TYPE_RAW, pmu->rcb_cntr_event);
     if (pmu->minus_ticks_cntr_event != 0) {
@@ -615,24 +599,48 @@ bool PerfCounters::is_rr_ticks_attr(const perf_event_attr& attr) {
   return false;
 }
 
+bool PerfCounters::should_virtualize_perf_event_open(const perf_event_attr& attr)
+{
+  return is_rr_ticks_attr(attr);
+}
+
 uint32_t PerfCounters::skid_size() {
-  init_attributes();
-  return rr::skid_size;
+  return skid_size_;
 }
 
-PerfCounters::PerfCounters(pid_t tid)
-    : tid(tid), started(false), counting(false) {
-  init_attributes();
+PerfCounters::PerfCounters(pid_t tid, PerfCounters* parent)
+  : skid_size_(0), pmu_flags(0),
+    has_ioc_period_bug(false), has_kvm_in_txcp_bug(false),
+    has_xen_pmi_bug(false), supports_txcp(false), only_one_counter(false),
+    activate_useless_counter(false), tid(tid), started(false),
+    counting(false) {
+  if (parent) {
+    pmu_flags = parent->pmu_flags;
+    skid_size_ = parent->skid_size_;
+    has_ioc_period_bug = parent->has_ioc_period_bug;
+    has_kvm_in_txcp_bug = parent->has_kvm_in_txcp_bug;
+    has_xen_pmi_bug = parent->has_xen_pmi_bug;
+    supports_txcp = parent->supports_txcp;
+    only_one_counter = parent->only_one_counter;
+    activate_useless_counter = parent->activate_useless_counter;
+    ticks_attr = parent->ticks_attr;
+    minus_ticks_attr = parent->ticks_attr;
+    ticks_attr = parent->ticks_attr;
+    minus_ticks_attr = parent->minus_ticks_attr;
+    cycles_attr = parent->cycles_attr;
+    hw_interrupts_attr = parent->hw_interrupts_attr;
+  } else
+    init_attributes();
 }
 
-static void make_counter_async(ScopedFd& fd, int signal) {
+void PerfCounters::make_counter_async(ScopedFd& fd, int signal) {
   if (fcntl(fd, F_SETFL, O_ASYNC) || fcntl(fd, F_SETSIG, signal)) {
     FATAL() << "Failed to make ticks counter ASYNC with sig"
             << signal_name(signal);
   }
 }
 
-static bool always_recreate_counters() {
+bool PerfCounters::always_recreate_counters() {
   // When we have the KVM IN_TXCP bug, reenabling the TXCP counter after
   // disabling it does not work.
   return has_ioc_period_bug || has_kvm_in_txcp_bug;
@@ -650,8 +658,8 @@ void PerfCounters::reset(Ticks ticks_period) {
   if (!started) {
     LOG(debug) << "Recreating counters with period " << ticks_period;
 
-    struct perf_event_attr attr = rr::ticks_attr;
-    struct perf_event_attr minus_attr = rr::minus_ticks_attr;
+    struct perf_event_attr attr = ticks_attr;
+    struct perf_event_attr minus_attr = minus_ticks_attr;
     attr.sample_period = ticks_period;
     fd_ticks_interrupt = start_counter(tid, -1, &attr);
     if (minus_attr.config != 0) {

@@ -271,8 +271,8 @@ DiversionSession::shr_ptr ReplaySession::clone_diversion() {
 }
 
 Task* ReplaySession::new_task(pid_t tid, pid_t rec_tid, uint32_t serial,
-                              SupportedArch a) {
-  return new ReplayTask(*this, tid, rec_tid, serial, a);
+                              SupportedArch a, Task* parent) {
+  return new ReplayTask(*this, tid, rec_tid, serial, a, parent);
 }
 
 /*static*/ ReplaySession::shr_ptr ReplaySession::create(const string& dir) {
@@ -358,7 +358,7 @@ static bool compute_ticks_request(
   *ticks_request = RESUME_UNLIMITED_TICKS;
   if (constraints.ticks_target > 0) {
     Ticks ticks_period =
-        constraints.ticks_target - PerfCounters::skid_size() - t->tick_count();
+        constraints.ticks_target - t->skid_size() - t->tick_count();
     if (ticks_period <= 0) {
       // Behave as if we actually executed something. Callers assume we did.
       t->clear_wait_status();
@@ -748,16 +748,16 @@ Completion ReplaySession::emulate_async_signal(
              << ip;
 
   /* XXX should we only do this if (ticks > 10000)? */
-  while (ticks_left - PerfCounters::skid_size() > PerfCounters::skid_size()) {
+  while (ticks_left - t->skid_size() > t->skid_size()) {
     LOG(debug) << "  programming interrupt for "
-               << (ticks_left - PerfCounters::skid_size()) << " ticks";
+               << (ticks_left - t->skid_size()) << " ticks";
 
     // Avoid overflow. If ticks_left > MAX_TICKS_REQUEST, execution will stop
     // early but we'll treat that just like a stray TIME_SLICE_SIGNAL and
     // continue as needed.
     continue_or_step(t, constraints,
                      (TicksRequest)(min<Ticks>(MAX_TICKS_REQUEST, ticks_left) -
-                                    PerfCounters::skid_size()));
+                                    t->skid_size()));
     guard_unexpected_signal(t);
 
     ticks_left = ticks - t->tick_count();
@@ -1264,7 +1264,7 @@ void ReplaySession::check_approaching_ticks_target(
     BreakStatus& break_status) {
   if (constraints.ticks_target > 0) {
     Ticks ticks_left = constraints.ticks_target - t->tick_count();
-    if (ticks_left <= PerfCounters::skid_size()) {
+    if (ticks_left <= t->skid_size()) {
       break_status.approaching_ticks_target = true;
     }
   }

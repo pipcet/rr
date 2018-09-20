@@ -19,6 +19,7 @@
 #include "Registers.h"
 #include "TaskishUid.h"
 #include "TraceStream.h"
+#include "VirtualPerfCounterMonitor.h"
 #include "WaitStatus.h"
 #include "core.h"
 #include "kernel_abi.h"
@@ -165,6 +166,18 @@ public:
    * out any state that might have been affected by that.
    */
   void flush_inconsistent_state();
+
+  bool is_ticks_attr(const perf_event_attr& attr)
+  {
+    return hpc.is_rr_ticks_attr(attr);
+  }
+
+  Ticks skid_size() { return hpc.skid_size(); }
+
+  bool should_virtualize_perf_event_open(const perf_event_attr& attr)
+  {
+    return hpc.should_virtualize_perf_event_open(attr);
+  }
 
   /**
    * Return total number of ticks ever executed by this task.
@@ -814,7 +827,7 @@ public:
 
 protected:
   Task(Session& session, pid_t tid, pid_t rec_tid, uint32_t serial,
-       SupportedArch a);
+       SupportedArch a, Task* parent);
   virtual ~Task();
 
   enum CloneReason {

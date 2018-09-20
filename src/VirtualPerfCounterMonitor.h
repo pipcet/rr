@@ -17,7 +17,7 @@ namespace rr {
  */
 class VirtualPerfCounterMonitor : public FileMonitor {
 public:
-  static bool should_virtualize(const struct perf_event_attr& attr);
+  static bool should_virtualize_perf_event_open(PerfCounters& perf_counters, const struct perf_event_attr& attr);
 
   VirtualPerfCounterMonitor(Task* t, Task* target,
                             const struct perf_event_attr& attr);
@@ -47,6 +47,7 @@ private:
   void maybe_enable_interrupt(Task* t, uint64_t after);
   void disable_interrupt() const;
 
+  Task *task;
   Ticks initial_ticks;
   Ticks target_ticks_;
   TaskUid target_tuid_;

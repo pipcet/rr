@@ -57,7 +57,7 @@ enum SignalDisposition { SIGNAL_DEFAULT, SIGNAL_IGNORE, SIGNAL_HANDLER };
 class RecordTask : public Task {
 public:
   RecordTask(RecordSession& session, pid_t _tid, uint32_t serial,
-             SupportedArch a);
+             SupportedArch a, Task* parent);
 
   Task* clone(CloneReason reason, int flags, remote_ptr<void> stack,
               remote_ptr<void> tls, remote_ptr<int> cleartid_addr,

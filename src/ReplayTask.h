@@ -16,7 +16,7 @@ class TraceFrame;
 class ReplayTask : public Task {
 public:
   ReplayTask(ReplaySession& session, pid_t _tid, pid_t _rec_tid,
-             uint32_t serial, SupportedArch a);
+             uint32_t serial, SupportedArch a, Task* parent);
 
   ReplaySession& session() const;
   TraceReader& trace_reader() const;

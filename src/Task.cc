@@ -63,7 +63,7 @@ static const unsigned int NUM_X86_DEBUG_REGS = 8;
 static const unsigned int NUM_X86_WATCHPOINTS = 4;
 
 Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
-           SupportedArch a)
+           SupportedArch a, Task* parent)
     : unstable(false),
       stable_exit(false),
       scratch_ptr(),
@@ -72,7 +72,7 @@ Task::Task(Session& session, pid_t _tid, pid_t _rec_tid, uint32_t serial,
       desched_fd_child(-1),
       // This will be initialized when the syscall buffer is.
       cloned_file_data_fd_child(-1),
-      hpc(_tid),
+      hpc(_tid, parent ? &parent->hpc : nullptr),
       tid(_tid),
       rec_tid(_rec_tid > 0 ? _rec_tid : _tid),
       syscallbuf_size(0),
@@ -255,7 +255,7 @@ void Task::emulate_jump(remote_code_ptr ip) {
   Registers r = regs();
   r.set_ip(ip);
   set_regs(r);
-  ticks += PerfCounters::ticks_for_unconditional_indirect_branch(this);
+  ticks += hpc.ticks_for_unconditional_indirect_branch(this);
 }
 
 bool Task::is_desched_event_syscall() {
@@ -1682,7 +1682,8 @@ Task* Task::clone(CloneReason reason, int flags, remote_ptr<void> stack,
     ASSERT(this, reason == TRACEE_CLONE);
   }
   Task* t =
-      new_task_session->new_task(new_tid, new_rec_tid, new_serial, arch());
+    new_task_session->new_task(new_tid, new_rec_tid, new_serial, arch(),
+                               this);
 
   if (CLONE_SHARE_VM & flags) {
     t->as = as;

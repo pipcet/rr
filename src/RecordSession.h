@@ -147,7 +147,7 @@ public:
   }
 
   virtual Task* new_task(pid_t tid, pid_t rec_tid, uint32_t serial,
-                         SupportedArch a) override;
+                         SupportedArch a, Task* parent) override;
 
   RecordTask* find_task(pid_t rec_tid) const;
   RecordTask* find_task(const TaskUid& tuid) const;

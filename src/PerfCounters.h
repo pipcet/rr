@@ -7,6 +7,7 @@
 #define _GNU_SOURCE 1
 #endif
 
+#include <linux/perf_event.h>
 #include <signal.h>
 #include <stdint.h>
 #include <sys/types.h>
@@ -33,11 +34,34 @@ class Task;
  * counters of interest.
  */
 class PerfCounters {
+  bool attributes_initialized;
+  struct perf_event_attr ticks_attr;
+  struct perf_event_attr minus_ticks_attr;
+  struct perf_event_attr cycles_attr;
+  struct perf_event_attr hw_interrupts_attr;
+  uint32_t skid_size_;
+  uint32_t pmu_flags;
+  bool has_ioc_period_bug;
+  bool has_kvm_in_txcp_bug;
+  bool has_xen_pmi_bug;
+  bool supports_txcp;
+  bool only_one_counter;
+  bool activate_useless_counter;
+
+  void check_for_ioc_period_bug();
+  void check_for_kvm_in_txcp_bug();
+  void check_for_xen_pmi_bug();
+  void check_working_counters();
+  void check_for_bugs();
+  void init_attributes();
+  bool always_recreate_counters();
+  void make_counter_async(ScopedFd&, int);
+  ScopedFd start_counter(pid_t, int, struct perf_event_attr*, bool*);
 public:
   /**
    * Create performance counters monitoring the given task.
    */
-  PerfCounters(pid_t tid);
+  PerfCounters(pid_t tid, PerfCounters* parent = nullptr);
   ~PerfCounters() { stop(); }
 
   void set_tid(pid_t tid);
@@ -69,7 +93,7 @@ public:
   /**
    * Return the number of ticks we need for an emulated branch.
    */
-  static Ticks ticks_for_unconditional_indirect_branch(Task*);
+  Ticks ticks_for_unconditional_indirect_branch(Task*);
 
   /**
    * Read the current value of the ticks counter.
@@ -86,20 +110,22 @@ public:
    * hope that tracees don't either. */
   enum { TIME_SLICE_SIGNAL = SIGSTKFLT };
 
-  static bool is_rr_ticks_attr(const perf_event_attr& attr);
+  bool is_rr_ticks_attr(const perf_event_attr& attr);
 
   /**
    * When an interrupt is requested, at most this many ticks may elapse before
    * the interrupt is delivered.
    */
-  static uint32_t skid_size();
+  uint32_t skid_size();
 
   /**
    * Use a separate skid_size for recording since we seem to see more skid
    * in practice during recording, in particular during the
    * async_signal_syscalls tests
    */
-  static uint32_t recording_skid_size() { return skid_size() * 5; }
+  uint32_t recording_skid_size() { return skid_size() * 5; }
+
+  bool should_virtualize_perf_event_open(const perf_event_attr&);
 
 private:
   // Only valid while 'counting' is true

@@ -137,8 +137,8 @@ ThreadGroup::shr_ptr Session::clone(Task* t, ThreadGroup::shr_ptr tg) {
 }
 
 Task* Session::new_task(pid_t tid, pid_t rec_tid, uint32_t serial,
-                        SupportedArch a) {
-  return new Task(*this, tid, rec_tid, serial, a);
+                        SupportedArch a, Task* parent) {
+  return new Task(*this, tid, rec_tid, serial, a, parent);
 }
 
 vector<AddressSpace*> Session::vms() const {
